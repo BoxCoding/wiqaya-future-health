@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wiqaya Prevention Planner</title>
+  <meta name="description" content="Predictive prevention pathways for Abu Dhabi: care gaps, risk, household outreach and safeguards. Synthetic data only.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M16 6l8 3v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V9z' fill='none' stroke='white' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M16 5l9 3.4v6.8c0 5.6-3.8 9.4-9 11.3-5.2-1.9-9-5.7-9-11.3V8.4z"/><path d="M11.5 16.2l3 3 6-6.4"/></svg>
+        </span>
+        <span><strong>Wiqaya</strong><small>وقاية · Prevention planner</small></span>
+      </div>
+      <nav id="nav" role="tablist" aria-label="Views" aria-orientation="vertical"></nav>
+      <div class="side-foot">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span>Synthetic data only<br><small>No real health records</small></span>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="top">
+        <div>
+          <p class="eyebrow">Future Health · Population Health · Abu Dhabi</p>
+          <h1 id="page-title">Weekly outreach plan</h1>
+          <p id="page-sub" class="lede"></p>
+        </div>
+        <div class="top-tools">
+          <label class="field"><span>Primary-care centre</span><select id="centre"></select></label>
+          <span class="pill" id="week-pill"></span>
+        </div>
+      </header>
+
+      <section class="kpis" id="kpis" aria-label="Key figures"></section>
+
+      <main id="main">
+        <section id="overview" role="tabpanel" aria-labelledby="tab-overview"></section>
+        <section id="copilot" role="tabpanel" aria-labelledby="tab-copilot" hidden></section>
+        <section id="plan" role="tabpanel" aria-labelledby="tab-plan" hidden></section>
+        <section id="person" role="tabpanel" aria-labelledby="tab-person" hidden></section>
+        <section id="safeguards" role="tabpanel" aria-labelledby="tab-safeguards" hidden></section>
+        <section id="outcomes" role="tabpanel" aria-labelledby="tab-outcomes" hidden></section>
+      </main>
+    </div>
+  </div>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <div id="status" class="sr-only" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

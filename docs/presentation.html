@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiqaya Solution Deck</title>
+<meta name="description" content="Wiqaya: predictive prevention pathways for Abu Dhabi. Problem, solution, HLD, LLD, AI safety, results and roadmap.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #061a18; --panel: rgba(255,255,255,.055); --panel-2: rgba(255,255,255,.09); --line: rgba(255,255,255,.13);
+  --ink: #f2fbf9; --ink-2: #b9d8d2; --muted: #86a8a1;
+  --teal: #2dd4bf; --teal-2: #0f766e; --blue: #3987e5; --violet: #9085e9; --gold: #f5d77a; --amber: #fab219; --coral: #eb6834; --green: #22c55e;
+  --display: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.06' stroke-width='1.2'%3E%3Crect x='18' y='18' width='28' height='28'/%3E%3Crect x='18' y='18' width='28' height='28' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3C/g%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) { color-scheme: light; --bg: #eef5f3; --panel: rgba(255,255,255,.78); --panel-2: #ffffff; --line: rgba(6,40,36,.12);
+    --ink: #082522; --ink-2: #34524d; --muted: #5d7a74; --gold: #a37b00; --teal: #0f766e; --amber: #b7791f;
+    --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%230f766e' stroke-opacity='0.07' stroke-width='1.2'%3E%3Crect x='18' y='18' width='28' height='28'/%3E%3Crect x='18' y='18' width='28' height='28' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3C/g%3E%3C/svg%3E"); }
+}
+:root[data-theme="light"] { color-scheme: light; --bg: #eef5f3; --panel: rgba(255,255,255,.78); --panel-2: #ffffff; --line: rgba(6,40,36,.12);
+  --ink: #082522; --ink-2: #34524d; --muted: #5d7a74; --gold: #a37b00; --teal: #0f766e; --amber: #b7791f; }
+* { box-sizing: border-box; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .num { font-family: var(--display); letter-spacing: -.02em; margin: 0; }
+p { margin: 0; }
+.slide { min-height: 100vh; scroll-snap-align: start; padding: 64px max(16px, 6vw); display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden;
+  background: var(--star), radial-gradient(900px 500px at 0% 0%, rgba(45,212,191,.16), transparent 60%), radial-gradient(800px 500px at 100% 100%, rgba(144,133,233,.14), transparent 60%); }
+.slide:nth-child(even) { background: var(--star), radial-gradient(900px 500px at 100% 0%, rgba(57,135,229,.15), transparent 60%), radial-gradient(700px 400px at 0% 100%, rgba(245,215,122,.10), transparent 60%); }
+.wrap { max-width: 1180px; width: 100%; margin: 0 auto; }
+.eyebrow { font-size: .8rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--teal); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.eyebrow b { font-family: var(--display); color: var(--muted); font-weight: 600; letter-spacing: .06em; }
+h2 { font-size: clamp(1.8rem, 3.6vw, 2.9rem); line-height: 1.1; margin-bottom: 14px; }
+h2 em { font-style: normal; background: linear-gradient(90deg, var(--teal), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { color: var(--ink-2); font-size: 1.12rem; max-width: 70ch; margin-bottom: 28px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; backdrop-filter: blur(6px); }
+.card h3 { font-size: 1.08rem; margin-bottom: 6px; }
+.card p, .card li { color: var(--ink-2); font-size: .95rem; }
+.card ul { margin: 6px 0 0; padding-left: 18px; }
+.ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 12px; color: #fff; font-family: var(--display); font-weight: 800; }
+.ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.c-teal { background: linear-gradient(135deg, #14b8a6, #0f766e); } .c-blue { background: linear-gradient(135deg, #3987e5, #1c5cab); }
+.c-violet { background: linear-gradient(135deg, #9085e9, #4a3aa7); } .c-gold { background: linear-gradient(135deg, #f5c04a, #c98500); }
+.c-coral { background: linear-gradient(135deg, #f0a07a, #d95926); }
+.num { font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 800; line-height: 1; }
+.num.gold { color: var(--gold); } .num.teal { color: var(--teal); }
+.stat { display: grid; gap: 6px; }
+.stat span { color: var(--muted); font-size: .88rem; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
+td code, p code, li code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .84em; background: var(--panel-2); padding: 1px 6px; border-radius: 6px; color: var(--ink); }
+.tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-2); margin: 2px 4px 2px 0; }
+.tag.ok { color: #052e16; background: #86efac; border: 0; } .tag.warn { color: #3b2500; background: #fcd34d; border: 0; } .tag.ai { color: #fff; background: linear-gradient(135deg, #3987e5, #9085e9); border: 0; }
+svg.diagram { width: 100%; height: auto; display: block; }
+svg.diagram text { fill: var(--ink); font-family: system-ui, sans-serif; }
+svg.diagram .sub { fill: var(--ink-2); font-size: 12px; }
+svg.diagram .box { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.5; }
+svg.diagram .model { fill: rgba(57,135,229,.18); stroke: var(--blue); stroke-width: 2; }
+svg.diagram .safe { fill: rgba(34,197,94,.14); stroke: var(--green); stroke-width: 2; }
+svg.diagram .band { fill: rgba(45,212,191,.14); stroke: var(--teal); stroke-width: 2; }
+svg.diagram .edge { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 15px; }
+.hero-title { font-size: clamp(2.6rem, 6vw, 5rem); font-weight: 800; line-height: 1.02; letter-spacing: -.04em; margin: 10px 0 18px; }
+.hero-title span { background: linear-gradient(90deg, var(--teal), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; background: linear-gradient(140deg, #14b8a6, #0f766e); box-shadow: 0 12px 30px rgba(20,184,166,.35); }
+.logo svg { width: 38px; height: 38px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+.chips span { padding: 7px 13px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: .88rem; color: var(--ink-2); }
+.bar { height: 14px; border-radius: 7px; background: var(--panel-2); overflow: hidden; margin: 6px 0 4px; }
+.bar i { display: block; height: 100%; border-radius: 7px; }
+.bar .ours { background: linear-gradient(90deg, var(--blue), var(--violet)); } .bar .base { background: #7d8b88; } .bar .naive { background: linear-gradient(90deg, #f0a07a, var(--coral)); }
+.row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 70px; gap: 12px; align-items: center; font-size: .9rem; color: var(--ink-2); }
+.row b { font-family: var(--display); color: var(--ink); text-align: right; font-size: 1.05rem; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; position: relative; }
+.timeline::before { content: ""; position: absolute; left: 22px; right: 22px; top: 21px; height: 3px; background: linear-gradient(90deg, var(--teal), var(--blue), var(--violet), var(--gold)); opacity: .55; border-radius: 2px; }
+.timeline li { position: relative; }
+.timeline .dot { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 800; color: #fff; margin-bottom: 12px; box-shadow: 0 0 0 6px var(--bg); }
+.timeline small { display: block; color: var(--teal); font-weight: 700; font-size: .76rem; letter-spacing: .06em; text-transform: uppercase; }
+.timeline strong { display: block; font-size: 1.05rem; margin: 2px 0 4px; }
+.timeline span { color: var(--ink-2); font-size: .9rem; }
+.quote { font-family: var(--display); font-size: clamp(1.3rem, 2.4vw, 1.9rem); line-height: 1.3; padding: 22px 26px; border-radius: 18px; border: 1px solid var(--line);
+  background: linear-gradient(120deg, rgba(45,212,191,.14), rgba(57,135,229,.10), rgba(144,133,233,.12)); position: relative; }
+.quote::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 5px; border-radius: 3px; background: linear-gradient(var(--teal), var(--violet)); }
+.foot { margin-top: 18px; color: var(--muted); font-size: .82rem; }
+/* chrome */
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 3px; width: 0; z-index: 10; background: linear-gradient(90deg, var(--teal), var(--blue), var(--gold)); }
+.counter { position: fixed; right: 18px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font: 600 .8rem var(--display); color: var(--ink-2); backdrop-filter: blur(8px); }
+.toc { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 10; display: grid; gap: 8px; }
+.toc a { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: block; transition: transform .2s, background .2s; }
+.toc a.on { background: var(--teal); transform: scale(1.5); }
+.theme { position: fixed; right: 18px; top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 11; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); border-radius: 999px; padding: 6px 12px; font: 600 .78rem var(--display); cursor: pointer; }
+:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; border-radius: 6px; }
+/* Visible at rest; slides in gently when it enters view. */
+.reveal.in { animation: rise .6s ease both; }
+@keyframes rise { from { transform: translateY(14px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .reveal.in { animation: none; } }
+@media (max-width: 960px) { .g3, .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .timeline { grid-template-columns: 1fr 1fr; } .timeline::before { display: none; } .toc { display: none; } }
+@media (max-width: 640px) { html { scroll-snap-type: none; } .g2, .g3, .g4 { grid-template-columns: 1fr; } .slide { min-height: auto; padding: 56px 16px; } .row { grid-template-columns: 100px minmax(0, 1fr) 56px; } .table-scroll { overflow-x: auto; } }
+@media print { html { scroll-snap-type: none; } .slide { min-height: auto; page-break-after: always; } .progress, .counter, .toc, .theme { display: none; } }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<button class="theme" id="theme" type="button" aria-label="Toggle light or dark theme">Light / Dark</button>
+<nav class="toc" id="toc" aria-label="Slides"></nav>
+<div class="counter" id="counter" aria-live="polite">1 / 18</div>
+
+<!-- 1 Title -->
+<section class="slide" id="s1" aria-label="Title">
+  <div class="wrap reveal">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5l9 3.4v6.8c0 5.6-3.8 9.4-9 11.3-5.2-1.9-9-5.7-9-11.3V8.4z"/><path d="M11.5 16.2l3 3 6-6.4"/></svg></div>
+    <p class="eyebrow" style="margin-top:22px">Future Health Digital Innovation Challenge · Population Health · Abu Dhabi</p>
+    <h1 class="hero-title">Wiqaya <span style="font-weight:700">وقاية</span><br>Prevention that reaches<br>the right family, <span>first.</span></h1>
+    <p class="lede">A multi-agent AI planner that finds children and adults with unmet preventive care, invites the households an invitation will actually help, and explains every decision in Arabic and English.</p>
+    <div class="chips"><span>Working prototype</span><span>Multi-agent AI · Gemini</span><span>Bias-corrected risk model</span><span>Benefit-ranked invitations</span><span>Fairness gates</span><span>101 automated tests</span></div>
+  </div>
+</section>
+
+<!-- 2 Problem -->
+<section class="slide" id="s2" aria-label="The problem">
+  <div class="wrap">
+    <p class="eyebrow reveal">01 <b>The problem</b></p>
+    <h2 class="reveal">Calendar rules invite people on a schedule. <em>Risk doesn't follow a schedule.</em></h2>
+    <p class="lede reveal">Eligibility for Well-Child Visits and adult screening still leans on age and sex. The families with the highest unmet need sit in signals a rule never reads, so they are missed, invited late, or sent to the wrong pathway.</p>
+    <div class="grid g4 reveal">
+      <div class="card"><div class="ic c-teal">01</div><h3>Missed milestones</h3><p>A toddler with no developmental screen waits for the next routine visit.</p></div>
+      <div class="card"><div class="ic c-blue">02</div><h3>Family history ignored</h3><p>An adult whose father had early colorectal cancer is invited at the standard age.</p></div>
+      <div class="card"><div class="ic c-violet">03</div><h3>Genomics unused</h3><p>An actionable variant on record never triggers counselling or enhanced surveillance.</p></div>
+      <div class="card"><div class="ic c-gold">04</div><h3>One message for all</h3><p>The same SMS for every household, so the least-reached stay least reached.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 Solution loop -->
+<section class="slide" id="s3" aria-label="Our solution">
+  <div class="wrap">
+    <p class="eyebrow reveal">02 <b>Our solution</b></p>
+    <h2 class="reveal">Four steps, one loop, <em>one consent ledger</em></h2>
+    <svg class="diagram reveal" viewBox="0 0 1000 300" role="img" aria-label="Flag, Route, Reach, Audit loop under a consent ledger">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <rect x="20" y="16" width="960" height="44" rx="12" class="band"/><text x="500" y="44" text-anchor="middle" class="title">Consent ledger: only authorised data enters each step, every read is logged</text>
+      <g><rect x="20" y="90" width="215" height="120" rx="14" class="box"/><text x="127" y="122" text-anchor="middle" class="title">1 · Flag</text><text x="127" y="148" text-anchor="middle" class="sub">Care gaps from rules</text><text x="127" y="168" text-anchor="middle" class="sub">Bias-corrected risk score</text><text x="127" y="188" text-anchor="middle" class="sub">Interval + top factors</text></g>
+      <g><rect x="268" y="90" width="215" height="120" rx="14" class="box"/><text x="375" y="122" text-anchor="middle" class="title">2 · Route</text><text x="375" y="148" text-anchor="middle" class="sub">Approved pathway catalogue</text><text x="375" y="168" text-anchor="middle" class="sub">Benefit ranking × capacity</text><text x="375" y="188" text-anchor="middle" class="sub">Clinician decides</text></g>
+      <g><rect x="516" y="90" width="215" height="120" rx="14" class="box"/><text x="623" y="122" text-anchor="middle" class="title">3 · Reach</text><text x="623" y="148" text-anchor="middle" class="sub">Arabic or English templates</text><text x="623" y="168" text-anchor="middle" class="sub">Household, private, teen</text><text x="623" y="188" text-anchor="middle" class="sub">One-tap opt-out</text></g>
+      <g><rect x="764" y="90" width="215" height="120" rx="14" class="box"/><text x="871" y="122" text-anchor="middle" class="title">4 · Audit</text><text x="871" y="148" text-anchor="middle" class="sub">Reach gate per segment</text><text x="871" y="168" text-anchor="middle" class="sub">Calibration, small cells hidden</text><text x="871" y="188" text-anchor="middle" class="sub">Outcomes vs baseline</text></g>
+      <path class="edge" d="M235 150H266" marker-end="url(#a1)"/><path class="edge" d="M483 150H514" marker-end="url(#a1)"/><path class="edge" d="M731 150H762" marker-end="url(#a1)"/>
+      <path class="edge" d="M871 210V262H127V212" marker-end="url(#a1)"/><text x="500" y="284" text-anchor="middle" class="sub">Completed visits and outcomes feed evaluation and retraining</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 4 Differentiators -->
+<section class="slide" id="s4" aria-label="What makes it different">
+  <div class="wrap">
+    <p class="eyebrow reveal">03 <b>What makes Wiqaya different</b></p>
+    <h2 class="reveal">We don't just find who is at risk. <em>We find who an invitation will help.</em></h2>
+    <div class="grid g4 reveal">
+      <div class="card"><div class="ic c-blue"><svg viewBox="0 0 24 24"><path d="M3 21h18M6 17v-6M11 17V5M16 17v-9M21 17v-3"/></svg></div><h3>Invite for benefit</h3><p>Priority = risk × invitation lift. Real clinic slots go to the households where an invite changes attendance.</p></div>
+      <div class="card"><div class="ic c-teal"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg></div><h3>The household is the unit</h3><p>A child's Well-Child Visit and a parent's screening booked back to back, with each adult's consent.</p></div>
+      <div class="card"><div class="ic c-violet"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Correct for the never-screened</h3><p>Trained only on people who were screened, so under-served families aren't scored down for missing data.</p></div>
+      <div class="card"><div class="ic c-gold"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div><h3>AI that can't invent figures</h3><p>Six agents; the model frames and selects, code writes every fact, a safety agent blocks drift.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 Product tour -->
+<section class="slide" id="s5" aria-label="Product tour">
+  <div class="wrap">
+    <p class="eyebrow reveal">04 <b>Product tour</b></p>
+    <h2 class="reveal">Six views, <em>one story</em></h2>
+    <div class="grid g3 reveal">
+      <div class="card"><span class="tag">Command centre</span><h3 style="margin-top:8px">The week at a glance</h3><p>Hero stats, schematic map of Abu Dhabi with regions sized by care due, AI spotlight and feature tiles.</p></div>
+      <div class="card"><span class="tag">Weekly plan</span><h3 style="margin-top:8px">Real slots, whole households</h3><p>Capacity ring, Monday–Friday heatmap with the midday prayer window kept free, podium, filters.</p></div>
+      <div class="card"><span class="tag ai">Ask Wiqaya</span><h3 style="margin-top:8px">Multi-agent copilot</h3><p>Plain-language questions, verified fact lines, agent pipeline, blocked drafts and the full trace.</p></div>
+      <div class="card"><span class="tag">Person</span><h3 style="margin-top:8px">Decide with evidence</h3><p>Care gaps with overdue bars, risk with interval, invitation lift, data tiles, messages in a phone mock-up, AI case brief.</p></div>
+      <div class="card"><span class="tag">Safeguards</span><h3 style="margin-top:8px">Who is falling behind?</h3><p>Reach chart against the release gate, review cards, small-cell suppression, "Ask Wiqaya why".</p></div>
+      <div class="card"><span class="tag">Outcomes</span><h3 style="margin-top:8px">Proof against a baseline</h3><p>Head-to-head with a calendar rule, bias meter, calibration, path to pilot.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 HLD architecture -->
+<section class="slide" id="s6" aria-label="High-level design: architecture">
+  <div class="wrap">
+    <p class="eyebrow reveal">05 <b>High-level design · architecture</b></p>
+    <h2 class="reveal">Layers that keep <em>models honest and data authorised</em></h2>
+    <svg class="diagram reveal" viewBox="0 0 1000 470" role="img" aria-label="Architecture: UI, API, engine and agents, models and rules, data and LLM provider">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <rect x="20" y="10" width="960" height="70" rx="14" class="box"/><text x="40" y="38" class="title">Presentation</text><text x="40" y="62" class="sub">Single-page web app (HTML, CSS, vanilla JS) · 6 views · SVG charts · Arabic RTL · light/dark · phone layout · WCAG-minded</text>
+      <rect x="20" y="104" width="960" height="66" rx="14" class="band"/><text x="40" y="131" class="title">FastAPI service · app/main.py</text><text x="40" y="153" class="sub">10 endpoints · Pydantic validation · AI rate limit 20/min per client · no-cache UI · lifespan builds the engine once</text>
+      <rect x="20" y="194" width="470" height="120" rx="14" class="box"/><text x="40" y="222" class="title">Engine · app/engine.py</text><text x="40" y="246" class="sub">Care gaps, risk, lift, priority per person</text><text x="40" y="266" class="sub">Weekly household plan · calendar baseline</text><text x="40" y="286" class="sub">query() tool · person view · outcomes</text>
+      <rect x="510" y="194" width="470" height="120" rx="14" class="model"/><text x="530" y="222" class="title">Multi-agent copilot · app/agents.py</text><text x="530" y="246" class="sub">Supervisor → Query planner → Verifier → Analyst tool</text><text x="530" y="266" class="sub">→ Writer agents → Safety & grounding</text><text x="530" y="286" class="sub">Outreach checker · full trace for the UI</text>
+      <rect x="20" y="338" width="230" height="110" rx="14" class="box"/><text x="36" y="364" class="title">Rules</text><text x="36" y="386" class="sub">app/rules.py</text><text x="36" y="406" class="sub">7 pathways, versioned</text><text x="36" y="426" class="sub">placeholder schedules</text>
+      <rect x="265" y="338" width="225" height="110" rx="14" class="box"/><text x="281" y="364" class="title">Models</text><text x="281" y="386" class="sub">app/model.py · numpy</text><text x="281" y="406" class="sub">risk (logistic, bootstrap)</text><text x="281" y="426" class="sub">lift (T-learner)</text>
+      <rect x="505" y="338" width="225" height="110" rx="14" class="box"/><text x="521" y="364" class="title">Outreach + safeguards</text><text x="521" y="386" class="sub">app/outreach.py</text><text x="521" y="406" class="sub">app/safeguards.py</text><text x="521" y="426" class="sub">templates · gates · cells</text>
+      <rect x="745" y="338" width="235" height="110" rx="14" class="safe"/><text x="761" y="364" class="title">LLM provider</text><text x="761" y="386" class="sub">app/llm.py</text><text x="761" y="406" class="sub">Gemini (demo, synthetic)</text><text x="761" y="426" class="sub">Ollama local (production)</text>
+      <path class="edge" d="M500 80V102" marker-end="url(#a2)"/><path class="edge" d="M255 170V192" marker-end="url(#a2)"/><path class="edge" d="M745 170V192" marker-end="url(#a2)"/>
+      <path class="edge" d="M135 314V336" marker-end="url(#a2)"/><path class="edge" d="M377 314V336" marker-end="url(#a2)"/><path class="edge" d="M617 314V336" marker-end="url(#a2)"/><path class="edge" d="M862 314V336" marker-end="url(#a2)"/>
+      <path class="edge" d="M510 254H492" marker-end="url(#a2)"/>
+    </svg>
+    <p class="foot reveal">Synthetic population module <code>app/data.py</code> feeds the engine; its hidden ground truth is used only to score outcomes and is never returned by the API.</p>
+  </div>
+</section>
+
+<!-- 7 HLD flows -->
+<section class="slide" id="s7" aria-label="High-level design: flows">
+  <div class="wrap">
+    <p class="eyebrow reveal">06 <b>High-level design · key flows</b></p>
+    <h2 class="reveal">Two paths: <em>the weekly batch</em> and <em>the question</em></h2>
+    <div class="grid g2 reveal">
+      <div class="card"><h3>Weekly batch (startup, about 5 s for 41,745 people)</h3>
+        <ol><li>Build or load the population and consent flags</li><li>Fit the risk model on screened adults only, plus 20 bootstrap refits</li><li>Fit the lift model on past randomised outreach</li><li>Run care-gap rules for every person</li><li>Priority = need × lift for everyone with a gap and outreach consent</li><li>Fill 150 slots per centre with whole households, best benefit per slot first</li><li>Assign back-to-back slots, skipping 12:00–13:00</li><li>Compose household messages; score both policies</li></ol></div>
+      <div class="card"><h3>A question to Ask Wiqaya (2–6 s on Gemini)</h3>
+        <ol><li>Rate limit and length validation</li><li>Supervisor routes: population, case brief or safeguards</li><li>Query planner: rules first, model proposes typed JSON filters</li><li>Verifier keeps only filters the question supports</li><li>Analyst tool runs <code>engine.query()</code>; cells under 10 hidden</li><li>Code writes every fact as a verified sentence</li><li>Writer agent returns a fact-free lead plus which facts to show</li><li>Safety agent checks the lead; one revision, then the rule-based answer</li></ol></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 LLD modules -->
+<section class="slide" id="s8" aria-label="Low-level design: modules">
+  <div class="wrap">
+    <p class="eyebrow reveal">07 <b>Low-level design · modules</b></p>
+    <h2 class="reveal">Nine small modules, <em>one job each</em></h2>
+    <div class="card reveal table-scroll"><table>
+      <thead><tr><th>Module</th><th>Responsibility</th><th>Key functions and classes</th></tr></thead>
+      <tbody>
+        <tr><td><code>data.py</code></td><td>Synthetic households, people, consent, hidden truth</td><td><code>build(n_households, seed)</code>, <code>_person()</code></td></tr>
+        <tr><td><code>rules.py</code></td><td>Deterministic care gaps with reason, days overdue, data used</td><td><code>care_gaps(p)</code>, <code>_screen()</code>, <code>PATHWAYS</code></td></tr>
+        <tr><td><code>model.py</code></td><td>Risk and invitation-lift models, explanations, calibration</td><td><code>fit_logistic()</code>, <code>RiskModel</code>, <code>LiftModel</code>, <code>calibration()</code></td></tr>
+        <tr><td><code>engine.py</code></td><td>Priorities, weekly plan, baseline, outcomes, query tool, views</td><td><code>Engine.wiqaya_plan()</code>, <code>calendar_plan()</code>, <code>query()</code>, <code>person_view()</code></td></tr>
+        <tr><td><code>outreach.py</code></td><td>Arabic/English templates, privacy routing, slot times</td><td><code>compose()</code>, <code>slot_time()</code>, <code>ADOLESCENT_AGE</code></td></tr>
+        <tr><td><code>safeguards.py</code></td><td>Segment reach, gate, calibration, small-cell suppression</td><td><code>segment_table()</code>, <code>suppress()</code></td></tr>
+        <tr><td><code>agents.py</code></td><td>Multi-agent copilot and the safety agent</td><td><code>ask()</code>, <code>brief()</code>, <code>route()</code>, <code>parse_rules()</code>, <code>write_checked()</code>, <code>lead_check()</code></td></tr>
+        <tr><td><code>llm.py</code></td><td>Gemini or Ollama client; every failure returns None</td><td><code>chat()</code>, <code>chat_json()</code>, <code>status()</code></td></tr>
+        <tr><td><code>main.py</code></td><td>HTTP API, validation, rate limit, static UI</td><td><code>ai_rate_limit()</code>, endpoints below</td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<!-- 9 LLD API -->
+<section class="slide" id="s9" aria-label="Low-level design: API">
+  <div class="wrap">
+    <p class="eyebrow reveal">08 <b>Low-level design · API</b></p>
+    <h2 class="reveal">Ten endpoints, <em>validated at the boundary</em></h2>
+    <div class="card reveal table-scroll"><table>
+      <thead><tr><th>Method · path</th><th>Returns</th><th>Errors</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /health</code></td><td><code>{"status":"ok"}</code></td><td>-</td></tr>
+        <tr><td><code>GET /api/overview</code></td><td>People, households, due, opted out, gaps by pathway, centres</td><td>-</td></tr>
+        <tr><td><code>GET /api/plan/{centre}</code></td><td>Ranked households with members, pathways, slots, score</td><td>404 unknown centre</td></tr>
+        <tr><td><code>GET /api/person/{id}</code></td><td>Profile (no ground truth), gaps, risk + interval + factors, lift, provenance, messages, decisions</td><td>404, 422</td></tr>
+        <tr><td><code>POST /api/decisions</code></td><td>Recorded clinician decision (accept / change / decline)</td><td>404, 422 bad action or pathway</td></tr>
+        <tr><td><code>GET /api/safeguards?dimension=</code></td><td>Rows per segment: reach, gate, high-risk reach, calibration; suppression</td><td>422 bad dimension</td></tr>
+        <tr><td><code>GET /api/outcomes</code></td><td>Both policies, bias check, calibration deciles</td><td>-</td></tr>
+        <tr><td><code>GET /api/agent/status</code></td><td>Provider, model, online: never the key</td><td>-</td></tr>
+        <tr><td><code>POST /api/agent/ask</code></td><td>Answer, intent, source, trace, facts (lead, used, picked)</td><td>422 length 3–400, 429 rate limit</td></tr>
+        <tr><td><code>GET /api/agent/brief/{id}</code></td><td>Clinician brief with the same structure</td><td>404, 429</td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<!-- 10 LLD algorithms -->
+<section class="slide" id="s10" aria-label="Low-level design: algorithms">
+  <div class="wrap">
+    <p class="eyebrow reveal">09 <b>Low-level design · algorithms</b></p>
+    <h2 class="reveal">The maths, <em>kept small and explainable</em></h2>
+    <div class="grid g2 reveal">
+      <div class="card"><h3>Risk model</h3><ul>
+        <li>L2-regularised logistic regression by Newton steps (numpy)</li>
+        <li>Features: age, BMI, prediabetes, family history*, genomic finding*, visit history (*only if consented)</li>
+        <li><strong>Bias correction:</strong> trained only on screened adults; a never-screened person can't test positive</li>
+        <li>80% interval from 20 bootstrap refits; explanation = exact additive log-odds vs the average adult</li></ul></div>
+      <div class="card"><h3>Invitation lift</h3><ul>
+        <li>T-learner: one logistic model for invited, one for not invited, on past randomised outreach</li>
+        <li>Lift = P(attend | invited) − P(attend | not invited), clipped at 0</li>
+        <li>Area context used only here, never for eligibility; withheld → population average</li></ul></div>
+      <div class="card"><h3>Weekly plan</h3><ul>
+        <li>Priority = need × lift (adults: modelled risk; children: rules)</li>
+        <li>Group by household; rank by mean priority per slot; greedy fill to 150 slots, skipping households that don't fit</li>
+        <li>Slots: 20 min, 2 rooms, 08:00–16:00, 12:00–13:00 kept free, Monday–Friday</li></ul></div>
+      <div class="card"><h3>Safety agent</h3><ul>
+        <li>Lead must have no digits, number words, names, places, claims (percent, completed, target, trend…) or diagnostic words</li>
+        <li>Patient briefs also block clinical orders (requires, must)</li>
+        <li>Facts always shown in natural order; required facts are never dropped</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 AI pipeline -->
+<section class="slide" id="s11" aria-label="AI: multi-agent pipeline">
+  <div class="wrap">
+    <p class="eyebrow reveal">10 <b>AI · multi-agent copilot</b></p>
+    <h2 class="reveal">The model proposes. <em>Code verifies every figure.</em></h2>
+    <svg class="diagram reveal" viewBox="0 0 1000 250" role="img" aria-label="Agent pipeline from supervisor to safety">
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <g><rect x="10" y="40" width="150" height="100" rx="14" class="box"/><text x="85" y="74" text-anchor="middle" class="title">Supervisor</text><text x="85" y="98" text-anchor="middle" class="sub">routes the question</text><text x="85" y="116" text-anchor="middle" class="sub">rules, then model</text></g>
+      <g><rect x="175" y="40" width="150" height="100" rx="14" class="model"/><text x="250" y="74" text-anchor="middle" class="title">Query planner</text><text x="250" y="98" text-anchor="middle" class="sub">model proposes</text><text x="250" y="116" text-anchor="middle" class="sub">JSON filters</text></g>
+      <g><rect x="340" y="40" width="150" height="100" rx="14" class="box"/><text x="415" y="74" text-anchor="middle" class="title">Verifier</text><text x="415" y="98" text-anchor="middle" class="sub">drops filters the</text><text x="415" y="116" text-anchor="middle" class="sub">question lacks</text></g>
+      <g><rect x="505" y="40" width="150" height="100" rx="14" class="box"/><text x="580" y="74" text-anchor="middle" class="title">Analyst tool</text><text x="580" y="98" text-anchor="middle" class="sub">engine.query()</text><text x="580" y="116" text-anchor="middle" class="sub">cells &lt;10 hidden</text></g>
+      <g><rect x="670" y="40" width="150" height="100" rx="14" class="model"/><text x="745" y="74" text-anchor="middle" class="title">Writer agents</text><text x="745" y="98" text-anchor="middle" class="sub">fact-free lead +</text><text x="745" y="116" text-anchor="middle" class="sub">facts to show</text></g>
+      <g><rect x="835" y="40" width="155" height="100" rx="14" class="safe"/><text x="912" y="74" text-anchor="middle" class="title">Safety</text><text x="912" y="98" text-anchor="middle" class="sub">blocks numbers,</text><text x="912" y="116" text-anchor="middle" class="sub">names, claims</text></g>
+      <path class="edge" d="M160 90H173" marker-end="url(#a3)"/><path class="edge" d="M325 90H338" marker-end="url(#a3)"/><path class="edge" d="M490 90H503" marker-end="url(#a3)"/><path class="edge" d="M655 90H668" marker-end="url(#a3)"/><path class="edge" d="M820 90H833" marker-end="url(#a3)"/>
+      <path class="edge" d="M912 140V186H745V142" marker-end="url(#a3)"/><text x="830" y="210" text-anchor="middle" class="sub">rejected: one revision, then the rule-based answer</text>
+      <text x="500" y="240" text-anchor="middle" class="sub">Blue = LLM (Gemini in the demo, local Gemma in production) · Green = safety · Outlined = deterministic code</text>
+    </svg>
+    <div class="grid g3 reveal" style="margin-top:18px">
+      <div class="quote" style="grid-column: span 2">"Certain segments require adjustments to ensure equitable engagement." <span style="font-size:.6em;color:var(--muted);display:block;margin-top:8px">Gemini's approved lead, followed by verified sentences written by code.</span></div>
+      <div class="card"><h3>Caught in testing</h3><p>"The patient <strong>requires urgent</strong> clinical review" was blocked. "31 children are overdue" (31 were invited) and "100 percent completed" (100 were due) were blocked before display.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 Responsible AI -->
+<section class="slide" id="s12" aria-label="Responsible AI and governance">
+  <div class="wrap">
+    <p class="eyebrow reveal">11 <b>Responsible AI, safety and data governance</b></p>
+    <h2 class="reveal">Privacy by design, <em>visible on every screen</em></h2>
+    <div class="grid g3 reveal">
+      <div class="card"><div class="ic c-teal"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg></div><h3>Consent ledger</h3><p>Six data categories per person. Withheld data is never used, and each flag shows exactly what it read.</p></div>
+      <div class="card"><div class="ic c-violet"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></div><h3>Message privacy</h3><p>Adults' screening joins the family message only if they opted in. Teens 14+ get a confidential note. Genomic results are never named.</p></div>
+      <div class="card"><div class="ic c-gold"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V6z"/></svg></div><h3>Fairness gates</h3><p>Every segment's reach must be ≥ 80% of overall reach. Below-gate groups get outreach redesign, not silence.</p></div>
+      <div class="card"><div class="ic c-blue"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Small-cell suppression</h3><p>Any group under 10 people is hidden, plus a complementary cell so totals can't reveal it.</p></div>
+      <div class="card"><div class="ic c-coral"><svg viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/></svg></div><h3>Clinician decides</h3><p>Population prioritisation, never diagnosis. Accept, change or decline on every gap; every decision logged.</p></div>
+      <div class="card"><div class="ic c-teal"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg></div><h3>Safe operations</h3><p>Synthetic data only in the demo; local LLM path for real data; API key in a git-ignored file, sent in a header; AI rate limit.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 Results -->
+<section class="slide" id="s13" aria-label="Results">
+  <div class="wrap">
+    <p class="eyebrow reveal">12 <b>Results · same capacity, two policies, one week</b></p>
+    <h2 class="reveal"><em>+13.4%</em> more early findings from the same 1,200 invitations</h2>
+    <div class="grid g2 reveal">
+      <div class="card">
+        <div class="row"><span>Early findings</span><div class="bar"><i class="ours" style="width:100%"></i></div><b>64.2</b></div>
+        <div class="row"><span>Calendar rule</span><div class="bar"><i class="base" style="width:88.2%"></i></div><b>56.6</b></div>
+        <div class="row" style="margin-top:12px"><span>Completed visits</span><div class="bar"><i class="ours" style="width:100%"></i></div><b>757</b></div>
+        <div class="row"><span>Calendar rule</span><div class="bar"><i class="base" style="width:89.4%"></i></div><b>677</b></div>
+        <div class="row" style="margin-top:12px"><span>Caused by invite</span><div class="bar"><i class="ours" style="width:100%"></i></div><b>293</b></div>
+        <div class="row"><span>Calendar rule</span><div class="bar"><i class="base" style="width:98.6%"></i></div><b>289</b></div>
+        <p class="foot">Honest note: completions caused by the invitation are roughly level (+1% to +4% across seeds). Early findings win in every seed tried (+11% to +18%).</p>
+      </div>
+      <div class="grid">
+        <div class="card"><h3>Bias correction for 9,330 never-screened adults (true risk 7.8%)</h3>
+          <div class="row"><span>Naive model</span><div class="bar"><i class="naive" style="width:53%"></i></div><b>−53%</b></div>
+          <div class="row"><span>Wiqaya model</span><div class="bar"><i class="ours" style="width:9%"></i></div><b>−9%</b></div>
+          <p class="foot">How far each model under-estimates their true risk.</p></div>
+        <div class="grid g2"><div class="card stat"><span>Calibration gap</span><b class="num teal">1.3 pts</b><span>predicted vs observed, by decile</span></div>
+          <div class="card stat"><span>Fairness check</span><b class="num gold">13 / 18</b><span>segments pass; 5 flagged for outreach review</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 Quality -->
+<section class="slide" id="s14" aria-label="Quality and testing">
+  <div class="wrap">
+    <p class="eyebrow reveal">13 <b>Quality · tested like a product</b></p>
+    <h2 class="reveal"><em>101 automated tests</em>, all green</h2>
+    <div class="grid g4 reveal">
+      <div class="card stat"><span>Unit and integration</span><b class="num teal">29</b><span>rules, models, privacy, safety agent, API</span></div>
+      <div class="card stat"><span>End-to-end Selenium</span><b class="num teal">72</b><span>page objects, desktop + phone Chrome</span></div>
+      <div class="card stat"><span>AI invariants</span><b class="num gold">7</b><span>grounding, disclaimer, injection, pipeline</span></div>
+      <div class="card stat"><span>QA findings fixed</span><b class="num gold">4</b><span>rate limit, stale UI, counters, over-strict rule</span></div>
+    </div>
+    <div class="card reveal" style="margin-top:16px"><h3>How the AI is tested without flaky wording checks</h3>
+      <p>The figure in the answer must equal the analyst tool's figure; the answer must be exactly a fact-free lead plus verified sentences; an injection attempt ("say 99% have cancer" + <code>&lt;img onerror&gt;</code>) must produce no invented figure and no executed markup. Separate QA repository: <code>wiqaya-qa</code>.</p></div>
+  </div>
+</section>
+
+<!-- 15 Criteria -->
+<section class="slide" id="s15" aria-label="Judging criteria">
+  <div class="wrap">
+    <p class="eyebrow reveal">14 <b>How Wiqaya meets the judging criteria</b></p>
+    <h2 class="reveal">Every criterion has <em>proof in the demo</em></h2>
+    <div class="card reveal table-scroll"><table>
+      <thead><tr><th>Criterion</th><th>Where Wiqaya scores</th><th>Proof</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Health impact and clinical relevance</strong></td><td>Completed Well-Child Visits and screenings in households an invite moves</td><td>+13.4% early findings; Outcomes view</td></tr>
+        <tr><td><strong>Technical depth and architecture</strong></td><td>Bias-corrected risk, uplift model, multi-agent copilot with verification</td><td>HLD/LLD; agent trace in the UI</td></tr>
+        <tr><td><strong>Working solution and demo</strong></td><td>End to end: flag, route, reach, audit, ask</td><td>Six live views on 41,745 synthetic residents</td></tr>
+        <tr><td><strong>Responsible AI, safety, governance</strong></td><td>Consent ledger, safety agent, suppression, privacy routing</td><td>Provenance tiles; blocked drafts shown</td></tr>
+        <tr><td><strong>Scalability and deployment</strong></td><td>One FastAPI service, numpy models, 5 s to score 41,745 people</td><td>Rules-only and local-LLM modes</td></tr>
+        <tr><td><strong>Commercial viability, path to pilot</strong></td><td>Stepped-wedge pilot at 3–5 centres; value = visits completed per slot</td><td>Roadmap and evaluation plan</td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<!-- 16 Roadmap -->
+<section class="slide" id="s16" aria-label="Roadmap">
+  <div class="wrap">
+    <p class="eyebrow reveal">15 <b>Path to pilot</b></p>
+    <h2 class="reveal">A stepped-wedge rollout <em>that measures itself</em></h2>
+    <ol class="timeline reveal">
+      <li><span class="dot c-teal">1</span><small>Months 0–6</small><strong>Rules pilot</strong><span>Care-gap rules and outreach at 3–5 centres; 12-month baseline frozen first.</span></li>
+      <li><span class="dot c-blue">2</span><small>Months 6–12</small><strong>Risk model live</strong><span>Bias-corrected model behind clinician review once safeguards pass.</span></li>
+      <li><span class="dot c-violet">3</span><small>Months 9–18</small><strong>Genomic pathways</strong><span>Consented genetic counselling and enhanced surveillance.</span></li>
+      <li><span class="dot c-gold">4</span><small>Month 18+</small><strong>Emirate-wide</strong><span>Continuous monitoring, monthly drift checks, annual model review.</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 17 Limitations -->
+<section class="slide" id="s17" aria-label="Assumptions and limitations">
+  <div class="wrap">
+    <p class="eyebrow reveal">16 <b>Assumptions and limitations</b></p>
+    <h2 class="reveal">What we'd tell <em>a clinical review board</em></h2>
+    <div class="grid g2 reveal">
+      <div class="card"><h3>Assumptions</h3><ul>
+        <li>All data is synthetic; results are scored against a simulated ground truth</li>
+        <li>Screening intervals, start ages and the adolescent age (14) are placeholders for DoH-approved values</li>
+        <li>Past outreach was randomised, which makes invitation lift learnable</li></ul></div>
+      <div class="card"><h3>Limitations and next steps</h3><ul>
+        <li>No sign-in yet; clinician decisions held in memory (PostgreSQL in the pilot)</li>
+        <li>Arabic templates need native-speaker and clinical review</li>
+        <li>Children prioritised by rules only; paediatric model on the roadmap</li>
+        <li>Map is schematic; the rate limit is per process</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 Close -->
+<section class="slide" id="s18" aria-label="Closing">
+  <div class="wrap reveal" style="text-align:center">
+    <div class="logo" style="margin:0 auto" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5l9 3.4v6.8c0 5.6-3.8 9.4-9 11.3-5.2-1.9-9-5.7-9-11.3V8.4z"/><path d="M11.5 16.2l3 3 6-6.4"/></svg></div>
+    <h1 class="hero-title" style="margin-top:22px">The same slots.<br><span>More families reached in time.</span></h1>
+    <p class="lede" style="margin:0 auto 26px">Wiqaya turns Abu Dhabi's longitudinal and genomic data into invitations that get completed, with AI that explains itself and can't invent a figure.</p>
+    <div class="grid g4" style="text-align:left">
+      <div class="card stat"><span>Early findings</span><b class="num gold">+13.4%</b><span>same 1,200 invitations</span></div>
+      <div class="card stat"><span>Bias closed</span><b class="num teal">53% → 9%</b><span>never-screened under-estimate</span></div>
+      <div class="card stat"><span>AI agents</span><b class="num teal">6</b><span>every figure verified by code</span></div>
+      <div class="card stat"><span>Tests</span><b class="num gold">101</b><span>all passing</span></div>
+    </div>
+  </div>
+</section>
+
+<script>
+(() => {
+  const slides = [...document.querySelectorAll(".slide")];
+  const toc = document.getElementById("toc"), counter = document.getElementById("counter"), bar = document.getElementById("progress");
+  toc.innerHTML = slides.map((s, i) => `<a href="#${s.id}" aria-label="Slide ${i + 1}: ${s.getAttribute("aria-label")}"></a>`).join("");
+  const dots = [...toc.children];
+  let current = 0;
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.querySelectorAll(".reveal").forEach((el, i) => { el.style.animationDelay = `${i * 90}ms`; el.classList.add("in"); });
+    current = slides.indexOf(e.target);
+    counter.textContent = `${current + 1} / ${slides.length}`;
+    dots.forEach((d, i) => d.classList.toggle("on", i === current));
+  }), { threshold: 0.45 });
+  slides.forEach((s) => io.observe(s));
+  addEventListener("scroll", () => { const h = document.documentElement; bar.style.width = `${(h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100}%`; }, { passive: true });
+  addEventListener("keydown", (e) => {
+    const next = { ArrowDown: 1, PageDown: 1, ArrowRight: 1, " ": 1, ArrowUp: -1, PageUp: -1, ArrowLeft: -1 }[e.key];
+    if (next === undefined || e.target.closest("button, a, input")) return;
+    e.preventDefault();
+    slides[Math.max(0, Math.min(slides.length - 1, current + next))].scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  });
+  const root = document.documentElement, btn = document.getElementById("theme");
+  try { const t = localStorage.getItem("wiqaya-deck-theme"); if (t) root.dataset.theme = t; } catch (_) {}
+  btn.addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("wiqaya-deck-theme", root.dataset.theme); } catch (_) {}
+  });
+})();
+</script>
+</body>
+</html>
