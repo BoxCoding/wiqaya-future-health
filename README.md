@@ -13,7 +13,7 @@ behind it.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8099     # open http://localhost:8099
-echo 'GEMINI_API_KEY=your-key' > .env          # or WIQAYA_LLM=ollama for a local model
+echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses Ollama
 .venv/bin/python -m pytest -q                  # 29 tests, no model or key needed
 ```
 
@@ -21,9 +21,16 @@ echo 'GEMINI_API_KEY=your-key' > .env          # or WIQAYA_LLM=ollama for a loca
 
 ## AI: multi-agent copilot
 
-The agents run on **Gemini** (`gemini-3.1-flash-lite`) for this demo, which is safe because every record is synthetic.
-The production path is a **local model via Ollama** (`WIQAYA_LLM=ollama`, `WIQAYA_MODEL=gemma3:4b`), so real health
-data never leaves the environment. `WIQAYA_LLM=off` runs every agent on rules and still answers.
+The agents run on **Gemini** (`gemini-3.1-flash-lite`) everywhere. **Ollama is for local runs only**:
+
+| Situation | Model |
+| --- | --- |
+| `GEMINI_API_KEY` set (local or deployed) | Gemini |
+| Local run without a key, or `WIQAYA_LLM=ollama` | Ollama (`WIQAYA_MODEL`, default `gemma3:1b`) |
+| Deployed (`WIQAYA_ENV=production`) without a key | No model: agents answer from rules |
+| `WIQAYA_LLM=off` | No model: agents answer from rules |
+
+Set `WIQAYA_ENV=production` on every deployment so Ollama is never used there.
 
 Key: put `GEMINI_API_KEY=...` in `wiqaya/.env` (git-ignored, read at startup). The key goes in a request header,
 never in a URL or a log.
@@ -63,7 +70,7 @@ calibrated risk model, the invitation-lift (uplift) model and the benefit rankin
 | `app/outreach.py` | Approved templates in Arabic and English; private messages unless the adult opted in to family messages; adolescents 14+ with their own contact get a confidential message; genomic findings never named |
 | `app/safeguards.py` | Segment table, reach gate, small-cell suppression with a complementary cell |
 | `app/agents.py` | Multi-agent copilot: supervisor, query planner, verifier, analyst tool, writers, outreach checker, safety and grounding |
-| `app/llm.py` | Local Ollama client with timeouts; returns None so callers fall back |
+| `app/llm.py` | Gemini client (Ollama on local runs only) with timeouts; returns None so callers fall back |
 | `app/main.py` | FastAPI endpoints (`/api/agent/ask`, `/api/agent/brief/{id}` included) and the static UI |
 
 ## Results on synthetic data (seed 7, 8 centres × 150 slots, one week)
@@ -88,8 +95,9 @@ Bias check: for adults never screened, true risk is 7.8%; a naive model predicts
   A real pilot measures them with a stepped-wedge rollout.
 - Ranking by invitation lift deprioritises people unlikely to respond. The safeguards tab shows
   which segments fall below the reach gate; those need an outreach redesign, not silence.
-- The demo sends synthetic data to the Gemini API. Real data must use the local Ollama path.
-- `gemma3:1b` is too small for the planner and writer roles; use `gemma3:4b` or larger locally.
+- The demo sends synthetic data to the Gemini API. Before real patient data goes to Gemini, the pilot needs DoH approval,
+  a data-processing agreement and in-region processing.
+- For local Ollama runs, `gemma3:1b` is too small for the planner and writer roles; use `gemma3:4b` or larger.
 - AI endpoints are limited to 20 requests a minute per client (`WIQAYA_ASK_LIMIT`), per process.
 - End-to-end Selenium suite (72 tests) lives in the separate `wiqaya-qa` repository.
 - Clinician decisions are kept in memory (lost on restart). No authentication: demo only.

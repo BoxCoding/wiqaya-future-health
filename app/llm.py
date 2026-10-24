@@ -1,7 +1,7 @@
-"""LLM client for the agents: Gemini (demo, synthetic data) or a local Ollama model (production path,
-health data never leaves the machine).
+"""LLM client for the agents. Gemini everywhere; Ollama only on a local run.
 
-WIQAYA_LLM=gemini | ollama | off (default: gemini when GEMINI_API_KEY is set, else ollama).
+WIQAYA_ENV=local (default) | production. Set WIQAYA_ENV=production on every deployment: Ollama is then never used.
+WIQAYA_LLM=gemini | ollama | off forces a provider (ollama only takes effect on a local run).
 Every call can fail or time out: callers get None and use their rule-based fallback.
 """
 import json
@@ -34,9 +34,20 @@ def _load_dotenv():
 _load_dotenv()
 
 
+def is_local():
+    return os.getenv("WIQAYA_ENV", "local") == "local"
+
+
 def provider():
-    p = os.getenv("WIQAYA_LLM") or ("gemini" if os.getenv("GEMINI_API_KEY") else "ollama")
-    return p if p in ("gemini", "ollama") else "off"
+    """Gemini when a key is set; Ollama only on a local run (asked for, or no key); otherwise rules only."""
+    p = os.getenv("WIQAYA_LLM")
+    if p == "off":
+        return "off"
+    if p == "ollama" and is_local():
+        return "ollama"
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    return "ollama" if is_local() and p != "gemini" else "off"
 
 
 def model():

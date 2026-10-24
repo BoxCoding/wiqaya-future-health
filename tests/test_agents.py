@@ -91,3 +91,24 @@ def test_offline_case_brief_and_safeguards(engine):
     assert agents.ask(engine, "Brief me on person 5")["intent"] == "case_brief"
     assert agents.ask(engine, "Is any group left behind?")["intent"] == "safeguards"
     assert "no person" in agents.ask(engine, "Brief me on person 9999999")["answer"]
+
+
+@pytest.mark.parametrize("env, key, forced, expected", [
+    ("local", "k", None, "gemini"),            # key set: Gemini everywhere
+    ("production", "k", None, "gemini"),
+    ("local", None, None, "ollama"),           # local run without a key: Ollama
+    ("production", None, None, "off"),         # deployed without a key: never Ollama, rules only
+    ("local", "k", "ollama", "ollama"),        # forced Ollama works locally...
+    ("production", "k", "ollama", "gemini"),   # ...but is ignored in production
+    ("production", None, "ollama", "off"),
+    ("local", None, "gemini", "off"),          # Gemini asked for but no key
+    ("local", "k", "off", "off"),
+])
+def test_ollama_runs_only_locally(monkeypatch, env, key, forced, expected):
+    monkeypatch.setenv("WIQAYA_ENV", env)
+    for name, value in (("GEMINI_API_KEY", key), ("WIQAYA_LLM", forced)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    assert llm.provider() == expected

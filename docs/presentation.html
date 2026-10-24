@@ -201,7 +201,7 @@ svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 1
       <rect x="20" y="338" width="230" height="110" rx="14" class="box"/><text x="36" y="364" class="title">Rules</text><text x="36" y="386" class="sub">app/rules.py</text><text x="36" y="406" class="sub">7 pathways, versioned</text><text x="36" y="426" class="sub">placeholder schedules</text>
       <rect x="265" y="338" width="225" height="110" rx="14" class="box"/><text x="281" y="364" class="title">Models</text><text x="281" y="386" class="sub">app/model.py · numpy</text><text x="281" y="406" class="sub">risk (logistic, bootstrap)</text><text x="281" y="426" class="sub">lift (T-learner)</text>
       <rect x="505" y="338" width="225" height="110" rx="14" class="box"/><text x="521" y="364" class="title">Outreach + safeguards</text><text x="521" y="386" class="sub">app/outreach.py</text><text x="521" y="406" class="sub">app/safeguards.py</text><text x="521" y="426" class="sub">templates · gates · cells</text>
-      <rect x="745" y="338" width="235" height="110" rx="14" class="safe"/><text x="761" y="364" class="title">LLM provider</text><text x="761" y="386" class="sub">app/llm.py</text><text x="761" y="406" class="sub">Gemini (demo, synthetic)</text><text x="761" y="426" class="sub">Ollama local (production)</text>
+      <rect x="745" y="338" width="235" height="110" rx="14" class="safe"/><text x="761" y="364" class="title">LLM provider</text><text x="761" y="386" class="sub">app/llm.py</text><text x="761" y="406" class="sub">Gemini (all environments)</text><text x="761" y="426" class="sub">Ollama: local runs only</text>
       <path class="edge" d="M500 80V102" marker-end="url(#a2)"/><path class="edge" d="M255 170V192" marker-end="url(#a2)"/><path class="edge" d="M745 170V192" marker-end="url(#a2)"/>
       <path class="edge" d="M135 314V336" marker-end="url(#a2)"/><path class="edge" d="M377 314V336" marker-end="url(#a2)"/><path class="edge" d="M617 314V336" marker-end="url(#a2)"/><path class="edge" d="M862 314V336" marker-end="url(#a2)"/>
       <path class="edge" d="M510 254H492" marker-end="url(#a2)"/>
@@ -239,7 +239,7 @@ svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 1
         <tr><td><code>outreach.py</code></td><td>Arabic/English templates, privacy routing, slot times</td><td><code>compose()</code>, <code>slot_time()</code>, <code>ADOLESCENT_AGE</code></td></tr>
         <tr><td><code>safeguards.py</code></td><td>Segment reach, gate, calibration, small-cell suppression</td><td><code>segment_table()</code>, <code>suppress()</code></td></tr>
         <tr><td><code>agents.py</code></td><td>Multi-agent copilot and the safety agent</td><td><code>ask()</code>, <code>brief()</code>, <code>route()</code>, <code>parse_rules()</code>, <code>write_checked()</code>, <code>lead_check()</code></td></tr>
-        <tr><td><code>llm.py</code></td><td>Gemini or Ollama client; every failure returns None</td><td><code>chat()</code>, <code>chat_json()</code>, <code>status()</code></td></tr>
+        <tr><td><code>llm.py</code></td><td>Gemini client, Ollama on local runs only; every failure returns None</td><td><code>chat()</code>, <code>chat_json()</code>, <code>status()</code></td></tr>
         <tr><td><code>main.py</code></td><td>HTTP API, validation, rate limit, static UI</td><td><code>ai_rate_limit()</code>, endpoints below</td></tr>
       </tbody></table></div>
   </div>
@@ -309,7 +309,7 @@ svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 1
       <g><rect x="835" y="40" width="155" height="100" rx="14" class="safe"/><text x="912" y="74" text-anchor="middle" class="title">Safety</text><text x="912" y="98" text-anchor="middle" class="sub">blocks numbers,</text><text x="912" y="116" text-anchor="middle" class="sub">names, claims</text></g>
       <path class="edge" d="M160 90H173" marker-end="url(#a3)"/><path class="edge" d="M325 90H338" marker-end="url(#a3)"/><path class="edge" d="M490 90H503" marker-end="url(#a3)"/><path class="edge" d="M655 90H668" marker-end="url(#a3)"/><path class="edge" d="M820 90H833" marker-end="url(#a3)"/>
       <path class="edge" d="M912 140V186H745V142" marker-end="url(#a3)"/><text x="830" y="210" text-anchor="middle" class="sub">rejected: one revision, then the rule-based answer</text>
-      <text x="500" y="240" text-anchor="middle" class="sub">Blue = LLM (Gemini in the demo, local Gemma in production) · Green = safety · Outlined = deterministic code</text>
+      <text x="500" y="240" text-anchor="middle" class="sub">Blue = LLM (Gemini; Ollama only on a local run) · Green = safety · Outlined = deterministic code</text>
     </svg>
     <div class="grid g3 reveal" style="margin-top:18px">
       <div class="quote" style="grid-column: span 2">"Certain segments require adjustments to ensure equitable engagement." <span style="font-size:.6em;color:var(--muted);display:block;margin-top:8px">Gemini's approved lead, followed by verified sentences written by code.</span></div>
@@ -329,7 +329,7 @@ svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 1
       <div class="card"><div class="ic c-gold"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V6z"/></svg></div><h3>Fairness gates</h3><p>Every segment's reach must be ≥ 80% of overall reach. Below-gate groups get outreach redesign, not silence.</p></div>
       <div class="card"><div class="ic c-blue"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Small-cell suppression</h3><p>Any group under 10 people is hidden, plus a complementary cell so totals can't reveal it.</p></div>
       <div class="card"><div class="ic c-coral"><svg viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/></svg></div><h3>Clinician decides</h3><p>Population prioritisation, never diagnosis. Accept, change or decline on every gap; every decision logged.</p></div>
-      <div class="card"><div class="ic c-teal"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg></div><h3>Safe operations</h3><p>Synthetic data only in the demo; local LLM path for real data; API key in a git-ignored file, sent in a header; AI rate limit.</p></div>
+      <div class="card"><div class="ic c-teal"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg></div><h3>Safe operations</h3><p>Synthetic data only in the demo; Gemini key in a git-ignored file, sent in a header; AI rate limit; real data on Gemini needs DoH approval first.</p></div>
     </div>
   </div>
 </section>
@@ -389,7 +389,7 @@ svg.diagram .title { font-family: var(--display); font-weight: 700; font-size: 1
         <tr><td><strong>Technical depth and architecture</strong></td><td>Bias-corrected risk, uplift model, multi-agent copilot with verification</td><td>HLD/LLD; agent trace in the UI</td></tr>
         <tr><td><strong>Working solution and demo</strong></td><td>End to end: flag, route, reach, audit, ask</td><td>Six live views on 41,745 synthetic residents</td></tr>
         <tr><td><strong>Responsible AI, safety, governance</strong></td><td>Consent ledger, safety agent, suppression, privacy routing</td><td>Provenance tiles; blocked drafts shown</td></tr>
-        <tr><td><strong>Scalability and deployment</strong></td><td>One FastAPI service, numpy models, 5 s to score 41,745 people</td><td>Rules-only and local-LLM modes</td></tr>
+        <tr><td><strong>Scalability and deployment</strong></td><td>One FastAPI service, numpy models, 5 s to score 41,745 people</td><td>Gemini in every environment; rules-only fallback</td></tr>
         <tr><td><strong>Commercial viability, path to pilot</strong></td><td>Stepped-wedge pilot at 3–5 centres; value = visits completed per slot</td><td>Roadmap and evaluation plan</td></tr>
       </tbody></table></div>
   </div>
