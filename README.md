@@ -49,6 +49,9 @@ Every step shows in the UI as an agent trace (agent, action, MODEL or CODE, mill
 writes patient-facing messages: those stay approved templates. Machine learning also runs underneath: the
 calibrated risk model, the invitation-lift (uplift) model and the benefit ranking.
 
+Runtime architecture diagram (interactive, every box links to its source): `docs/architecture/wiqaya-runtime.html`;
+editable source: `docs/architecture/wiqaya-runtime.archify.json`.
+
 ## What the demo shows
 
 | Tab | What you see |
