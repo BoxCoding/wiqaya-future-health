@@ -103,6 +103,11 @@ def test_offline_case_brief_and_safeguards(engine):
     ("production", None, "ollama", "off"),
     ("local", None, "gemini", "off"),          # Gemini asked for but no key
     ("local", "k", "off", "off"),
+    ("local", "k", "OFF", "off"),              # any spelling of "off", or an unknown value, fails closed
+    ("local", "k", "none", "off"),
+    ("production", "k", "openai", "off"),
+    ("development", None, None, "ollama"),     # common local spellings count as local
+    ("LOCAL", None, None, "ollama"),
 ])
 def test_ollama_runs_only_locally(monkeypatch, env, key, forced, expected):
     monkeypatch.setenv("WIQAYA_ENV", env)

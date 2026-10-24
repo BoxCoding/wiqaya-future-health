@@ -35,19 +35,19 @@ _load_dotenv()
 
 
 def is_local():
-    return os.getenv("WIQAYA_ENV", "local") == "local"
+    return os.getenv("WIQAYA_ENV", "local").strip().lower() in ("local", "dev", "development")
 
 
 def provider():
     """Gemini when a key is set; Ollama only on a local run (asked for, or no key); otherwise rules only."""
-    p = os.getenv("WIQAYA_LLM")
-    if p == "off":
-        return "off"
+    p = (os.getenv("WIQAYA_LLM") or "").strip().lower()
+    if p not in ("", "gemini", "ollama"):
+        return "off"  # "off", "none", "0" or a typo: fail closed so data is never sent by accident
     if p == "ollama" and is_local():
         return "ollama"
     if os.getenv("GEMINI_API_KEY"):
         return "gemini"
-    return "ollama" if is_local() and p != "gemini" else "off"
+    return "ollama" if is_local() and not p else "off"
 
 
 def model():
@@ -97,7 +97,7 @@ def status():
     if p == "off":
         return {"provider": "off", "model": None, "online": False}
     if p == "gemini":
-        return {"provider": "gemini", "model": model(), "online": bool(os.getenv("GEMINI_API_KEY"))}
+        return {"provider": "gemini", "model": model(), "online": True}  # a key is set; reachability is not probed
     try:
         with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=2) as r:
             names = [m["name"] for m in json.loads(r.read()).get("models", [])]
