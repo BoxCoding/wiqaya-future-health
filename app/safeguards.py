@@ -25,6 +25,11 @@ def _mean(xs):
     return sum(xs) / len(xs) if xs else None
 
 
+def _cell_mean(xs):
+    """Mean over a sub-group, hidden when that sub-group is itself a small cell."""
+    return _mean(xs) if len(xs) >= MIN_CELL else None
+
+
 def _row(engine, segment, members, overall):
     contacted = engine.contacted
     due = [p for p in members if p["id"] in engine.priority]
@@ -34,9 +39,9 @@ def _row(engine, segment, members, overall):
     return dict(
         segment=segment, n=len(members), due=len(due), contacted=sum(p["id"] in contacted for p in due),
         reach=reach, gate=None if reach is None else ("pass" if reach >= REACH_GATE * overall else "review"),
-        high_risk_reach=_mean([p["id"] in contacted for p in high]),
-        predicted_risk=_mean([engine.risk[p["id"]][0] for p in screened]),
-        observed_rate=_mean([p["_truth"]["positive_hist"] for p in screened]),
+        high_risk_reach=_cell_mean([p["id"] in contacted for p in high]),
+        predicted_risk=_cell_mean([engine.risk[p["id"]][0] for p in screened]),
+        observed_rate=_cell_mean([p["_truth"]["positive_hist"] for p in screened]),
         suppressed=False,
     )
 

@@ -124,3 +124,17 @@ def test_ai_endpoints_are_rate_limited(monkeypatch):
         codes = [c.post("/api/agent/ask", json={"question": "children in Al Ain"}).status_code for _ in range(3)]
     main._asks.clear()
     assert codes == [200, 200, 429]
+
+
+def test_person_view_drops_consent_withheld_fields(engine):
+    p = next(p for p in engine.people if not p["consent"]["genomic"] and not p["consent"]["context"])
+    person = engine.person_view(p["id"])["person"]
+    assert "variant" not in person and "distance_km" not in person and "_truth" not in person
+
+
+def test_safeguard_means_hidden_over_small_subgroups(engine):
+    members = [p for p in engine.people if p["id"] in engine.priority][:40]
+    row = safeguards._row(engine, "x", members, 0.5)
+    high = [p for p in members if p["_truth"]["risk"] >= safeguards.HIGH_RISK]
+    assert (row["high_risk_reach"] is None) == (len(high) < safeguards.MIN_CELL)
+    assert safeguards._cell_mean([True] * 9) is None and safeguards._cell_mean([True] * 10) == 1.0

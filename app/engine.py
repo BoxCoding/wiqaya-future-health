@@ -23,6 +23,15 @@ def provenance(p):
     ]
 
 
+# fields each consent flag guards; withheld ones never leave the server
+CONSENT_FIELDS = {"family_history": ("fam_crc_age",), "genomic": ("variant",), "context": ("distance_km",)}
+
+
+def public_person(p):
+    hidden = {f for c, fs in CONSENT_FIELDS.items() if not p["consent"][c] for f in fs}
+    return {k: v for k, v in p.items() if not k.startswith("_") and k not in hidden}
+
+
 class Engine:
     def __init__(self, n_households=12000, seed=7, slots=SLOTS_PER_WEEK):
         rng = np.random.default_rng(seed + 1)
@@ -129,7 +138,7 @@ class Engine:
         risk = self.risk.get(pid)
         household = self.households[p["household"]]
         return dict(
-            person={k: v for k, v in p.items() if not k.startswith("_")},
+            person=public_person(p),
             gaps=self.gaps[pid], priority=self.priority.get(pid), lift=round(self.lift[pid], 4),
             slot=self.slot_of.get(pid),
             risk=None if risk is None else dict(p=risk[0], lo=risk[1], hi=risk[2], interval="80%",
