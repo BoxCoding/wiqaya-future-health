@@ -1,0 +1,10 @@
+.env
+.env.*
+.venv
+.git
+.archify
+__pycache__
+.pytest_cache
+docs
+tests
+deploy

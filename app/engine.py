@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 import numpy as np
 
 from . import data, model, outreach, rules
-from .safeguards import DIMENSIONS, MIN_CELL
+from .safeguards import DIMENSIONS, HIGH_RISK, MIN_CELL
 
 SLOTS_PER_WEEK = 150  # per centre; invitations are paced to real capacity
 
@@ -94,7 +94,7 @@ class Engine:
         return dict(invited=len(t), completions=round(sum(x["p1"] for x in t)),
                     caused_by_invite=round(sum(x["p1"] - x["p0"] for x in t)),
                     early_findings_caused=round(sum(x["risk"] * (x["p1"] - x["p0"]) for x in t), 1),
-                    high_risk_invited=sum(x["risk"] >= 0.15 for x in t))
+                    high_risk_invited=sum(x["risk"] >= HIGH_RISK for x in t))
 
     def bias_check(self):
         never = [p for p in self.adults if not p["_truth"]["screened_hist"]]

@@ -294,6 +294,11 @@ def route(question, trace):
     return "population_query", None
 
 
+def _reply(trace, intent, answer, source, facts):
+    return dict(answer=f"{answer.strip()} {DISCLAIMER}", intent=intent, source=source, trace=trace.steps,
+                facts=facts, model=llm.status())
+
+
 def ask(engine, question):
     trace = Trace()
     intent, pid = route(question, trace)
@@ -303,14 +308,10 @@ def ask(engine, question):
                     trace=trace.steps, facts=None, model=llm.status())
     run = {"case_brief": lambda: case_brief(engine, pid, trace), "safeguards": lambda: safeguards_report(engine, question, trace),
            "population_query": lambda: population_query(engine, question, trace)}[intent]
-    answer, source, facts = run()
-    return dict(answer=f"{answer.strip()} {DISCLAIMER}", intent=intent, source=source, trace=trace.steps,
-                facts=facts, model=llm.status())
+    return _reply(trace, intent, *run())
 
 
 def brief(engine, pid):
     trace = Trace()
     trace.add("Supervisor", "Routed by request", f"case_brief (person {pid})")
-    answer, source, facts = case_brief(engine, pid, trace)
-    return dict(answer=f"{answer.strip()} {DISCLAIMER}", intent="case_brief", source=source, trace=trace.steps,
-                facts=facts, model=llm.status())
+    return _reply(trace, "case_brief", *case_brief(engine, pid, trace))

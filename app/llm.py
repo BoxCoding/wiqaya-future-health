@@ -63,8 +63,9 @@ def _post(url, body, headers):
 
 def chat(system, user, schema=None, temperature=0.0):
     """Returns the model's text (a JSON string when `schema` is given), or None on any failure."""
+    p = provider()
     try:
-        if provider() == "gemini":
+        if p == "gemini":
             if schema:  # the schema rides in the prompt; agents validate every value against it anyway
                 system = f"{system}\nReply with JSON only, matching this JSON schema: {json.dumps(schema)}"
             body = {"systemInstruction": {"parts": [{"text": system}]},
@@ -73,7 +74,7 @@ def chat(system, user, schema=None, temperature=0.0):
                                          **({"responseMimeType": "application/json"} if schema else {})}}
             out = _post(f"{GEMINI_URL}/{model()}:generateContent", body, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
             return "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"]).strip() or None
-        if provider() == "ollama":
+        if p == "ollama":
             body = {"model": model(), "stream": False, "options": {"temperature": temperature},
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
             if schema:

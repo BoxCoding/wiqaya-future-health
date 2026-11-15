@@ -9,6 +9,7 @@ async function api(path, opts) {
   if (!r.ok) throw new Error(`${r.status}: ${(await r.json().catch(() => ({}))).detail ?? r.statusText}`);
   return r.json();
 }
+const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 const PATHS = {
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -565,6 +566,7 @@ const EXAMPLES = [
 ];
 const REQUIRED = { population: ["matches"], case: ["summary", "risk"], safeguards: ["below"] };
 let modelInfo = { online: false };
+const stages = (agents, gap) => agents.map((a, i) => `<span class="stage" style="--d:${i * gap}s">${icon(AGENT_ICON[a])}${a}</span>`).join("");
 
 function renderModel(m) {
   modelInfo = m;
@@ -657,12 +659,12 @@ async function ask(question) {
   $("#ask-input").value = "";
   thread.insertAdjacentHTML("beforeend", `<article class="turn user"><div class="user-bubble">${esc(question)}</div></article>
     <article class="turn ai pending"><span class="brief-orb">${icon("spark")}</span><div class="ai-bubble">
-      <div class="stages">${["Supervisor", "Query planner", "Verifier", "Analyst tool", "Narrator", "Safety & grounding"].map((a, i) => `<span class="stage" style="--d:${i * 0.35}s">${icon(AGENT_ICON[a])}${a}</span>`).join("")}</div>
+      <div class="stages">${stages(["Supervisor", "Query planner", "Verifier", "Analyst tool", "Narrator", "Safety & grounding"], 0.35)}</div>
       <div class="shimmer"></div><div class="shimmer short"></div></div></article>`);
   const pending = thread.lastElementChild;
   pending.scrollIntoView({ behavior: "smooth", block: "end" });
   try {
-    const r = await api("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    const r = await post("/api/agent/ask", { question });
     renderModel(r.model);
     pending.outerHTML = answerTurn(r);
     say("Answer ready");
@@ -674,9 +676,8 @@ const GUARDS = ["No numbers typed by the model", "No names or places invented", 
   "Required facts always present", "Household messages are approved templates"];
 
 function briefTiles(v, picked) {
-  const REQUIRED = ["summary", "risk"];
   const tag = (keys) => keys.some((k) => picked.includes(k)) ? `<span class="pick">${icon("spark")}AI pick</span>`
-    : keys.some((k) => REQUIRED.includes(k)) ? `<span class="verified">${icon("lock")}Required</span>` : `<span class="verified">${icon("check")}Verified</span>`;
+    : keys.some((k) => REQUIRED.case.includes(k)) ? `<span class="verified">${icon("lock")}Required</span>` : `<span class="verified">${icon("check")}Verified</span>`;
   const withheld = v.provenance.filter((d) => !d.authorised).map((d) => d.category);
   const r = v.risk;
   const tiles = [
@@ -692,7 +693,7 @@ function briefTiles(v, picked) {
 async function caseBrief(id) {
   const card = $("#brief"), box = $("#brief-body");
   card.classList.add("running");
-  box.innerHTML = `<div class="stages" role="status" aria-label="Agents working">${BRIEF_STAGES.map((a, i) => `<span class="stage" style="--d:${i * 0.45}s">${icon(AGENT_ICON[a])}${a}</span>`).join("")}</div>
+  box.innerHTML = `<div class="stages" role="status" aria-label="Agents working">${stages(BRIEF_STAGES, 0.45)}</div>
     <div class="shimmer"></div><div class="shimmer short"></div>`;
   try {
     const r = await api(`/api/agent/brief/${id}`);
@@ -738,8 +739,7 @@ document.addEventListener("click", async (ev) => {
   else if (t.hasAttribute("data-open-top")) { const first = $("#plan [data-person]"); if (first) openPerson(Number(first.dataset.person)); }
   else if (t.dataset.decide) {
     try {
-      const d = await api("/api/decisions", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ person_id: Number($("#person").dataset.id), pathway: t.dataset.pathway, action: t.dataset.decide }) });
+      const d = await post("/api/decisions", { person_id: Number($("#person").dataset.id), pathway: t.dataset.pathway, action: t.dataset.decide });
       t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
       say(`Recorded ${d.action} for ${d.pathway}`);
     } catch (e) { say(e.message); alert(e.message); }
