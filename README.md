@@ -14,10 +14,18 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8099     # open http://localhost:8099
 echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses Ollama
-.venv/bin/python -m pytest -q                  # 29 tests, no model or key needed
+.venv/bin/python -m pytest -q                  # 46 tests, no model or key needed
 ```
 
 `WIQAYA_HOUSEHOLDS` sets the population size (default 12000; startup takes about 5 s).
+
+## Deploy (Google Cloud Run)
+
+```bash
+PROJECT_ID=<your-project> deploy/cloudrun.sh   # reads GEMINI_API_KEY from .env into Secret Manager
+```
+
+Live demo: https://wiqaya-242709395679.me-central1.run.app (no login). Code report: `docs/CODE_REPORT.md`.
 
 ## AI: multi-agent copilot
 

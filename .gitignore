@@ -5,3 +5,6 @@ __pycache__/
 .env.*
 .archify/
 .DS_Store
+
+# Submission decks stay local
+docs/*.pptx
