@@ -146,7 +146,9 @@ class Engine:
             provenance=provenance(p),
             household=[dict(id=m["id"], name=m["name"], age=m["age"], role=m["role"], due=bool(self.gaps[m["id"]]))
                        for m in household],
-            messages=outreach.compose(household, self.gaps, self.slot_of),
+            # a private message is shown only on its recipient's page, never to the rest of the household
+            messages=[m for m in outreach.compose(household, self.gaps, self.slot_of)
+                      if not m["private"] or m["to_id"] == pid],
             decisions=[d for d in self.decisions if d["person_id"] == pid],
         )
 

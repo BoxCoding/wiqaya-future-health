@@ -366,7 +366,7 @@ async function openPerson(id) {
           <div class="pt ${d.authorised ? "on" : "off"}"><span class="pt-ic">${icon(d.authorised ? "shield" : "lock")}</span>
             <strong>${esc(d.category)}</strong><span class="small">${d.authorised ? esc(d.used_for) : "Withheld by consent, not used anywhere"}</span>
             <span class="pt-tag">${d.authorised ? "Used" : "Withheld"}</span></div>`).join("")}</div></div>
-      <div class="card"><div class="card-head"><div><h2>Household messages</h2><p class="card-sub">Exactly what the family sees · approved templates in Arabic or English</p></div></div>
+      <div class="card"><div class="card-head"><div><h2>Household messages</h2><p class="card-sub">Shared family messages and this person's own private ones · approved templates in Arabic or English</p></div></div>
         ${v.messages.length ? `<div class="phone"><div class="phone-notch"></div><div class="phone-top">${icon("shield")} Wiqaya · Abu Dhabi primary care</div>
           <div class="phone-body">${v.messages.map((m) => `
             <div class="sms-meta">To ${esc(m.to)} · ${esc(m.channel)} ${m.private ? `<span class="status warn">${icon("lock")}Private</span>` : `<span class="status good">${icon("check")}Family</span>`}</div>

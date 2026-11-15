@@ -138,3 +138,10 @@ def test_safeguard_means_hidden_over_small_subgroups(engine):
     high = [p for p in members if p["_truth"]["risk"] >= safeguards.HIGH_RISK]
     assert (row["high_risk_reach"] is None) == (len(high) < safeguards.MIN_CELL)
     assert safeguards._cell_mean([True] * 9) is None and safeguards._cell_mean([True] * 10) == 1.0
+
+
+def test_private_messages_only_on_recipients_page(engine):
+    for p in engine.people:
+        for m in engine.person_view(p["id"])["messages"]:
+            assert not m["private"] or m["to_id"] == p["id"]
+    assert any(m["private"] for p in engine.people for m in engine.person_view(p["id"])["messages"])
