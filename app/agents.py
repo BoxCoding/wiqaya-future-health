@@ -11,22 +11,24 @@ import json
 import re
 import time
 
-from . import llm, safeguards
+from . import llm, loop, safeguards
 from .data import NAMES, NATIONALITIES, REGIONS
 from .rules import PATHWAYS
 
 DISCLAIMER = "Population prioritisation, not a diagnosis; the clinician decides."
-INTENTS = ["population_query", "case_brief", "safeguards"]
+INTENTS = ["population_query", "case_brief", "safeguards", "bottlenecks"]
 
 SUPERVISOR_SYS = ("You route questions for Wiqaya, a preventive-care planner in Abu Dhabi. Pick population_query for "
                   "counts of people due by area, age or pathway; case_brief for one specific person; safeguards for "
-                  "fairness, reach or bias across groups.")
+                  "fairness, reach or bias across groups; bottlenecks for delays, follow-up, abnormal results or closing the care loop.")
 PLANNER_SYS = ("Convert the planner's question into filters over people with a care gap. Use null for anything the "
                "question does not state. Ages are in years.")
 NARRATOR_SYS = "You are Wiqaya's population analyst answering a public-health planner."
 BRIEF_SYS = ("You are Wiqaya's case reviewer briefing a clinician calmly. This is prioritisation, never a diagnosis; "
              "include the uncertainty.")
 SAFEGUARDS_SYS = "You are Wiqaya's safeguards reporter explaining fairness of outreach across groups."
+BOTTLENECK_SYS = ("You are Wiqaya's bottleneck analyst briefing care coordinators on where patients stall between "
+                  "invitation and a closed care loop. Be calm and practical; coordinators and clinicians decide every action.")
 
 SPEC_FIELDS = ["region", "nationality", "sex", "age_min", "age_max", "pathway", "in_plan", "group_by"]
 SPEC_SCHEMA = {"type": "object", "required": SPEC_FIELDS, "properties": {
@@ -44,6 +46,7 @@ NATIONALITY_WORDS = [(r"emirati", "Emirati"), (r"arab expat", "Arab expatriate")
                      (r"filipin", "Filipino"), (r"\bwestern\b(?! region)", "Western")]
 GROUP_WORDS = {"nationality": "nationality", "region": "region", "sex": "sex", "gender": "sex", "language": "language",
                "age": "age band"}
+BOTTLENECK_HINT = re.compile(r"bottleneck|delay|stall|stuck|follow[- ]?up|lost to|abnormal|closure|close the loop|care loop|overdue result|sign[- ]?off")
 SAFEGUARD_HINT = re.compile(r"safeguard|fair|bias|equit|gate|segment|under-?served|left behind")
 BANNED = re.compile(r"\b(diagnos\w*|you have|has (?:cancer|diabetes)|definitely|certainly|guarantee\w*|cure[sd]?|"
                     r"urgent\w*|immediate\w*|emergenc\w*|alarming)\b", re.I)
@@ -273,12 +276,45 @@ def safeguards_report(engine, question, trace):
     return answer, source, dict(kind="safeguards", dimension=dim, below_gate=below, **meta)
 
 
+def bottleneck_report(engine, trace):
+    """Where the screening-to-care loop stalls, why, and who to act on first. Every figure comes from loop.summary()."""
+    s = loop.summary(engine)
+    w = s["worst"]
+    trace.add("Loop monitor", "loop.summary()", f"{s['open']} open episodes, {s['overdue']} overdue; worst stage: {w['label']}")
+    work = loop.worklist(engine, limit=3)
+    trace.add("Loop monitor", "loop.worklist()", f"{len(work)} most urgent episodes with rule-based strategies")
+    facts = {"worst": sentence(f"the biggest delay is at '{w['label']}': {w['overdue']:,} of {w['count']:,} episodes waiting for "
+                               f"{loop.WAITING_FOR[w['stage']]} are past the {w['sla']}-day target"),
+             "abnormal": sentence(f"{s['abnormal_open']:,} abnormal results are still open, {s['abnormal_overdue']:,} of them overdue")}
+    if s["awaiting_signoff"]:
+        facts["signoff"] = sentence(f"{s['awaiting_signoff']:,} episodes are waiting for a clinician to sign off and close the loop")
+    barrier = max((b for b in s["barriers"] if b["rate"] is not None), key=lambda b: b["rate"], default=None)
+    if barrier:
+        facts["barrier"] = sentence(f"the barrier most linked to delay is '{barrier['barrier'].lower()}': "
+                                    f"{barrier['rate'] * 100:.0f}% of those open episodes are overdue")
+    if work:
+        facts["act"] = sentence("act first on " + "; ".join(
+            f"{x['id']} ({x['stage_label'].lower()}, {x['status']['overdue']} days overdue): {x['strategy']['action'].lower()}" for x in work))
+    answer, source, meta = write_checked(trace, "Bottleneck analyst", BOTTLENECK_SYS, facts,
+                                         dict(role="care coordinator brief", today=s["today"]), required=["worst", "abnormal"])
+    return answer, source, dict(kind="bottlenecks", summary=s, worklist=work, **meta)
+
+
+def bottlenecks(engine):
+    trace = Trace()
+    trace.add("Supervisor", "Routed by request", "bottlenecks")
+    return _reply(trace, "bottlenecks", *bottleneck_report(engine, trace))
+
+
 # ---------- Supervisor ----------
 def route(question, trace):
     spec, pid = parse_rules(question)
     if pid is not None:
         trace.add("Supervisor", "Routed by rules", f"case_brief (person {pid})")
         return "case_brief", pid
+    if BOTTLENECK_HINT.search(question.lower()):
+        trace.add("Supervisor", "Routed by rules", "bottlenecks")
+        return "bottlenecks", None
     if SAFEGUARD_HINT.search(question.lower()):
         trace.add("Supervisor", "Routed by rules", "safeguards")
         return "safeguards", None
@@ -307,7 +343,8 @@ def ask(engine, question):
         return dict(answer=f"There is no person {pid} in this population.", intent=intent, source="rules",
                     trace=trace.steps, facts=None, model=llm.status())
     run = {"case_brief": lambda: case_brief(engine, pid, trace), "safeguards": lambda: safeguards_report(engine, question, trace),
-           "population_query": lambda: population_query(engine, question, trace)}[intent]
+           "population_query": lambda: population_query(engine, question, trace),
+           "bottlenecks": lambda: bottleneck_report(engine, trace)}[intent]
     return _reply(trace, intent, *run())
 
 

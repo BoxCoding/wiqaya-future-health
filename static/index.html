@@ -24,7 +24,7 @@
       <nav id="nav" role="tablist" aria-label="Views" aria-orientation="vertical"></nav>
       <div class="side-foot">
         <span class="live-dot" aria-hidden="true"></span>
-        <span>Synthetic data only<br><small>No real health records</small></span>
+        <span>Synthetic EHR feed<br><small>FHIR R4 · HL7 v2 · no real records</small></span>
       </div>
     </aside>
 
@@ -41,10 +41,9 @@
         </div>
       </header>
 
-      <section class="kpis" id="kpis" aria-label="Key figures"></section>
-
       <main id="main">
         <section id="overview" role="tabpanel" aria-labelledby="tab-overview"></section>
+        <section id="loop" role="tabpanel" aria-labelledby="tab-loop" hidden></section>
         <section id="copilot" role="tabpanel" aria-labelledby="tab-copilot" hidden></section>
         <section id="plan" role="tabpanel" aria-labelledby="tab-plan" hidden></section>
         <section id="person" role="tabpanel" aria-labelledby="tab-person" hidden></section>
@@ -53,6 +52,7 @@
       </main>
     </div>
   </div>
+  <dialog id="episode" class="drawer" aria-labelledby="ep-title"></dialog>
   <div id="tip" class="tip" role="tooltip" hidden></div>
   <div id="status" class="sr-only" role="status" aria-live="polite"></div>
   <script src="app.js"></script>

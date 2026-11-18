@@ -29,11 +29,14 @@ const PATHS = {
   tool: '<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5z"/>',
   pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>',
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  loop: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7"/><path d="M20 4v4.7h-4.7"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.3"/><path d="M4 20v-4.7h4.7"/>',
+  feed: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name]}</svg>`;
 
 const VIEWS = {
   overview: ["Command centre", "home", "Command centre", ""],
+  loop: ["Care loop", "loop", "Screening-to-care loop", "Every invitation tracked through booking, result, referral and diagnosis to a clinician-signed closure. Events arrive as FHIR R4 resources and HL7 v2 lab results."],
   plan: ["Weekly plan", "plan", "Weekly outreach plan", "Whole households, ranked by the early findings an invitation is expected to cause, filling this week's real clinic slots. Population prioritisation: the clinician decides."],
   copilot: ["Ask Wiqaya", "spark", "Ask Wiqaya: multi-agent copilot", "Ask in plain language. A supervisor routes the question to specialist agents: the model proposes, deterministic tools execute, and a safety agent checks every draft before you see it."],
   person: ["Person", "person", "Person and household", "Care gaps from rules, risk from the model with its uncertainty, the data behind each flag, and the exact messages the household will receive."],
@@ -50,7 +53,7 @@ const avatar = (m, lg = "") => `<span class="av ${m.age < 18 ? "child" : ""} ${l
 const LANG = { ar: "Arabic", en: "English" };
 const CHIP_LEGEND = `<div class="legend"><span><span class="sw" style="background:var(--s3)"></span>Child pathway</span><span><span class="sw" style="background:var(--s1)"></span>Adult screening</span><span><span class="sw" style="background:var(--s7)"></span>Genomic</span></div>`;
 
-let overview, outcomes, regions, currentPerson, dimension = "nationality";
+let overview, outcomes, regions, loopSummary, currentPerson, dimension = "nationality";
 
 function showTab(id) {
   const [, , title, sub] = VIEWS[id];
@@ -60,13 +63,13 @@ function showTab(id) {
   $("#page-title").textContent = title;
   $("#page-sub").textContent = sub;
   $(".top-tools .field").hidden = id !== "plan";
-  $(".top").hidden = ["overview", "copilot", "person"].includes(id) && !(id === "person" && !currentPerson);
-  $("#kpis").hidden = ["overview", "plan", "safeguards", "outcomes", "copilot", "person"].includes(id);
+  $(".top").hidden = ["overview", "copilot", "person", "loop"].includes(id) && !(id === "person" && !currentPerson);
   const panel = $(`#${id}`);
   panel.classList.remove("enter"); void panel.offsetWidth; panel.classList.add("enter");
   countUp(panel);
   if (id === "safeguards") loadSafeguards();
   if (id === "outcomes") renderOutcomes();
+  if (id === "loop") loadLoop();
 }
 
 async function init() {
@@ -74,27 +77,14 @@ async function init() {
     `<button role="tab" id="tab-${id}" aria-controls="${id}" aria-selected="${i === 0}" data-view="${id}">${icon(ic)}${label}</button>`).join("");
   renderCopilot();
   $("#person").innerHTML = `<div class="card empty">${icon("person")}<p>Pick anyone from the weekly plan to see why they were invited.</p><button class="btn" data-open-top>Open the top-ranked household</button></div>`;
-  [overview, outcomes, regions] = await Promise.all([api("/api/overview"), api("/api/outcomes"), api("/api/safeguards?dimension=region")]);
+  [overview, outcomes, regions, loopSummary] = await Promise.all([api("/api/overview"), api("/api/outcomes"), api("/api/safeguards?dimension=region"), api("/api/loop")]);
   $("#week-pill").innerHTML = `${icon("clock")}Week of ${new Date(overview.week_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
-  renderKpis();
   $("#centre").innerHTML = overview.centres.map((c) => `<option>${esc(c)}</option>`).join("");
   $("#centre").addEventListener("change", () => loadPlan($("#centre").value));
   renderOverview();
   showTab("overview");
   await loadPlan(overview.centres[0]);
   api("/api/agent/status").then(renderModel).catch(() => renderModel({ online: false }));
-}
-
-function renderKpis() {
-  const [w, c] = Object.values(outcomes.policies);
-  const d = w.early_findings_caused / c.early_findings_caused - 1;
-  const tiles = [
-    ["Residents modelled", fmt(overview.people), `${fmt(overview.households)} households · synthetic`],
-    ["With a care gap", fmt(overview.due), `${pct(overview.due / overview.people, 0)} of residents are overdue`],
-    ["Invitations this week", fmt(outcomes.slots_per_centre * outcomes.centres), `${outcomes.slots_per_centre} slots × ${outcomes.centres} centres`],
-    ["Early findings vs calendar rule", `${d >= 0 ? "+" : ""}${(d * 100).toFixed(1)}%`, `${w.early_findings_caused} vs ${c.early_findings_caused} per week, same slots`, "hero"],
-  ];
-  $("#kpis").innerHTML = tiles.map(([k, v, s, cls = ""]) => `<div class="kpi lift ${cls}"><span class="kpi-k">${k}</span><span class="kpi-v">${v}</span><span class="kpi-s">${s}</span></div>`).join("");
 }
 
 /* Numbers count up from zero when a view opens; reduced-motion viewers see the final value at once. */
@@ -136,19 +126,14 @@ function renderOverview() {
   const [w, c] = Object.values(outcomes.policies);
   const d = (w.early_findings_caused / c.early_findings_caused - 1) * 100;
   const rows = regions.rows.filter((r) => !r.suppressed);
-  const feats = [
-    ["spark", "Ask in plain language", "Six agents route, plan, query and verify. Nothing reaches you unchecked.", "copilot"],
-    ["plan", "Benefit-ranked invitations", "Real clinic slots go to the households an invitation actually moves.", "plan"],
-    ["chart", "Bias-corrected risk", "Never-screened families are not scored down for missing data.", "outcomes"],
-    ["shield", "Fairness gates", "Every segment is checked for reach; small cells stay hidden.", "safeguards"],
-  ];
+  const L = loopSummary;
   $("#overview").innerHTML = `
     <section class="hero">
       <div class="hero-copy">
         <p class="hero-eyebrow">Future Health Challenge · Population Health · Abu Dhabi</p>
         <h1 class="hero-title">Prevention that reaches the right family, <span>first.</span></h1>
         <p class="hero-sub">Wiqaya finds children and adults with unmet preventive care, invites the households an invitation will actually help, and explains every decision, in Arabic and English.</p>
-        <div class="hero-cta"><button class="btn glow" data-view="copilot">${icon("spark")}Ask Wiqaya</button><button class="btn ghost" data-view="plan">${icon("plan")}This week's plan</button></div>
+        <div class="hero-cta"><button class="btn glow" data-view="loop">${icon("loop")}Open the care loop</button><button class="btn ghost" data-view="plan">${icon("plan")}This week's plan</button><button class="btn ghost" data-view="copilot">${icon("spark")}Ask Wiqaya</button></div>
         <div class="hero-chips"><span>${icon("clock")}Week of 26 Oct 2026</span><span id="hero-model">${icon("spark")}AI agents</span><span>${icon("lock")}Synthetic data only</span></div>
       </div>
       <div class="hero-panel">
@@ -171,13 +156,16 @@ function renderOverview() {
           <div class="region-nums"><div><b>${counter(r.due)}</b><span>due</span></div><div><b>${counter(r.contacted)}</b><span>invited</span></div><div><b>${counter(r.reach * 100, { dp: 1, suf: "%" })}</b><span>reach</span></div></div></div>`).join("")}
       </div>
     </div>
-    <div class="ai-spot card">
-      <div><p class="hero-eyebrow">Multi-agent AI copilot</p><h2>The model proposes. Code verifies.</h2>
-        <p class="card-sub" style="max-width:52ch">A supervisor routes each question to specialist agents. Every figure comes from a verified tool result, and the safety agent blocks invented numbers, names, places and claims.</p>
-        <button class="btn" style="margin-top:14px" data-ask="Are any groups being left behind this week?">${icon("spark")}Try: "Are any groups being left behind?"</button></div>
-      <ol class="pipe" aria-label="Agent pipeline">${["Supervisor", "Query planner", "Verifier", "Analyst tool", "Narrator", "Safety & grounding"].map((a) => `<li><span class="lane-ic">${icon(AGENT_ICON[a])}</span><small>${a}</small></li>`).join("")}<i class="pulse-dot" aria-hidden="true"></i></ol>
-    </div>
-    <div class="feats">${feats.map(([ic, h, t, v]) => `<button class="feat lift" data-view="${v}"><span class="feat-ic">${icon(ic)}</span><strong>${h}</strong><span>${t}</span></button>`).join("")}</div>`;
+    <button class="card loop-strip lift" data-view="loop">
+      <div><p class="eyebrow">${icon("loop")} Screening-to-care loop</p><h2>Follow-up needs you today</h2>
+        <p class="card-sub">Biggest delay: ${esc(L.worst.label)} · ${fmt(L.worst.overdue)} past the ${L.worst.sla}-day target</p></div>
+      <div class="ls-nums">
+        <div class="alarm"><b>${counter(L.abnormal_open)}</b><span>abnormal results open</span></div>
+        <div><b>${counter(L.awaiting_signoff)}</b><span>await sign-off</span></div>
+        <div><b>${counter(L.overdue)}</b><span>past target</span></div>
+        <div><b>${counter(L.closed)}</b><span>closed loops</span></div></div>
+      <span class="ls-go">${icon("up")}</span>
+    </button>`;
 }
 
 /* ---------- Weekly plan ---------- */
@@ -333,6 +321,7 @@ async function openPerson(id) {
         ${avatar(m)}<span><strong>${esc(m.name)}</strong><small>${esc(m.role)} · ${age(m.age)}</small></span>
         ${m.due ? `<span class="status warn">${icon("clock")}Due</span>` : `<span class="status good">${icon("check")}Up to date</span>`}</button>`).join("")}</div>
     ${p.consent.outreach ? "" : `<div class="banner">${icon("alert")}Opted out of outreach. Care stays fully available; no messages are sent.</div>`}
+    ${personLoop(v)}
     <div class="card brief" id="brief">
       <div class="brief-head"><div class="brief-title"><span class="brief-orb">${icon("spark")}</span>
         <div><h2>AI case brief</h2><p class="card-sub">Multi-agent review for the clinician · every figure verified by code</p></div></div>
@@ -342,14 +331,18 @@ async function openPerson(id) {
     </div>
     <div class="person-grid">
       <div class="card"><div class="card-head"><div><h2>Care gaps</h2><p class="card-sub">How long each is overdue · bars capped at 3 years</p></div><span class="badge">RULES</span></div>
-        ${v.gaps.length ? `<div class="gaps">${v.gaps.map((g) => `
+        ${v.gaps.length ? `<div class="gaps">${v.gaps.map((g) => {
+          const ep = v.care_loop.find((e) => e.pathway === g.pathway && !["invited", "booked"].includes(e.status.stage));
+          const seen = ep?.events.find((e) => e.stage === "attended");
+          return `
           <div class="gap-row">
-            <div class="gap-top">${chip(g.pathway)}<b>${overdue(g.overdue_days)} overdue</b></div>
-            <div class="od-track" data-tip="${fmt(g.overdue_days)} days overdue"><i class="k-${kind(g.pathway)}" style="width:${Math.max(Math.min(g.overdue_days / OVERDUE_CAP, 1) * 100, 3)}%"></i></div>
-            <p class="small">${esc(g.reason)} <span class="muted">· data: ${g.data.map(esc).join(", ")}</span></p>
+            <div class="gap-top">${chip(g.pathway)}${ep ? `<button class="link" data-episode="${ep.id}">${stageChip(`In care loop · ${ep.stage_label}`, ep.status.stage)}</button>` : `<b>${overdue(g.overdue_days)} overdue</b>`}</div>
+            ${ep ? "" : `<div class="od-track" data-tip="${fmt(g.overdue_days)} days overdue"><i class="k-${kind(g.pathway)}" style="width:${Math.max(Math.min(g.overdue_days / OVERDUE_CAP, 1) * 100, 3)}%"></i></div>`}
+            <p class="small">${ep ? `Screened ${esc(seen.on)}; follow-up is tracked in the care loop.` : esc(g.reason)} <span class="muted">· data: ${g.data.map(esc).join(", ")}</span></p>
             <div class="seg-group" role="group" aria-label="Clinician decision on ${esc(g.pathway)}">${["accept", "change", "decline"].map((a) => `
               <button data-decide="${a}" data-pathway="${esc(g.pathway)}" aria-pressed="${v.decisions.some((d) => d.pathway === g.pathway && d.action === a)}">${icon(a === "accept" ? "check" : a === "change" ? "pen" : "x")}${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}</div>
-          </div>`).join("")}</div>` : `<div class="rules-only">${icon("check")}<div><strong>Nothing overdue</strong><p class="small muted">No care gaps for this person this week.</p></div></div>`}
+          </div>`;
+        }).join("")}</div>` : `<div class="rules-only">${icon("check")}<div><strong>Nothing overdue</strong><p class="small muted">No care gaps for this person this week.</p></div></div>`}
         <p class="small muted" style="margin-top:12px">Schedules are placeholders for the DoH-approved guidelines.</p></div>
       <div class="stack">
         <div class="card"><div class="card-head"><h2>Risk</h2><span class="badge">MODEL</span></div>${risk}</div>
@@ -556,15 +549,17 @@ function renderOutcomes() {
 
 /* ---------- Ask Wiqaya: multi-agent copilot ---------- */
 const AGENT_ICON = { "Supervisor": "route", "Query planner": "pen", "Verifier": "eye", "Analyst tool": "tool", "Narrator": "pen",
-  "Case reviewer": "person", "Outreach checker": "msg", "Safeguards reporter": "shield", "Safety & grounding": "shield" };
+  "Case reviewer": "person", "Outreach checker": "msg", "Safeguards reporter": "shield", "Safety & grounding": "shield",
+  "Loop monitor": "loop", "Bottleneck analyst": "loop" };
 const EXAMPLES = [
   ["plan", "Population", "How many children under 5 in Al Ain are overdue a developmental check?"],
   ["plan", "Population", "Which Emirati women are overdue for cervical screening but not invited, by region?"],
   ["plan", "Population", "Adults over 45 in Al Dhafra due colorectal screening"],
   ["shield", "Fairness", "Are any groups being left behind this week?"],
+  ["loop", "Care loop", "Where are patients stalling after the invitation?"],
   ["person", "Case", "Brief me on person 120"],
 ];
-const REQUIRED = { population: ["matches"], case: ["summary", "risk"], safeguards: ["below"] };
+const REQUIRED = { population: ["matches"], case: ["summary", "risk"], safeguards: ["below"], bottlenecks: ["worst", "abnormal"] };
 let modelInfo = { online: false };
 const stages = (agents, gap) => agents.map((a, i) => `<span class="stage" style="--d:${i * gap}s">${icon(AGENT_ICON[a])}${a}</span>`).join("");
 
@@ -649,6 +644,9 @@ function factsPanel(f) {
       ${r.groups.length ? `<div class="hbars" style="margin-top:12px">${r.groups.map((g) => `<div class="hbar"><span>${esc(g.group)}</span><b>${fmt(g.count)}</b><div class="bar"><i style="width:${((g.count ?? 0) / max) * 100}%"></i></div></div>`).join("")}</div>` : ""}
       ${r.top.length ? `<h3 class="small" style="margin-top:16px">Highest benefit per invitation</h3><ul class="members" style="margin-top:8px">${r.top.map((p) => `<li class="member">${avatar(p)}<div><button class="link" data-person="${p.id}">${esc(p.name)}</button> <span class="muted small">${age(p.age)} · ${esc(p.centre)} · ${p.benefit_per_100} per 100</span></div></li>`).join("")}</ul>` : ""}</div>`;
   }
+  if (f.kind === "bottlenecks") return `<div class="sub-panel"><h3 class="small">Most urgent episodes · rule-based strategies</h3>
+    <ul class="wl-mini">${f.worklist.map((w) => `<li><button class="link" data-episode="${w.id}">${w.id} · ${esc(w.name)}</button> <span class="muted small">${esc(w.stage_label)} · ${w.status.overdue} days overdue</span><br><span class="small">${esc(w.strategy.action)}</span></li>`).join("")}</ul>
+    <p style="margin-top:12px"><button class="btn" data-view="loop">${icon("loop")}Open the care loop</button></p></div>`;
   if (f.kind === "case") return `<div class="sub-panel"><p><button class="btn" data-person="${f.person_id}">${icon("person")}Open person ${f.person_id}</button></p></div>`;
   return `<div class="sub-panel"><h3 class="small">Segments below the reach gate · by ${esc(f.dimension)}</h3><div class="consents" style="margin-top:10px">${f.below_gate.map((s) => `<span class="status warn">${icon("alert")}${esc(s)}</span>`).join("") || `<span class="status good">${icon("check")}All pass</span>`}</div>
     <p style="margin-top:12px"><button class="btn" data-view="safeguards">${icon("shield")}Open safeguards</button></p></div>`;
@@ -721,10 +719,203 @@ async function caseBrief(id) {
   finally { card.classList.remove("running"); }
 }
 
+/* ---------- Care loop ---------- */
+let loopStage = null, coordinator = "Care coordinator";
+const STAGE_TONE = { invited: "s1", booked: "s1", attended: "s3", resulted: "s7", referred: "s2", diagnosed: "s2", closed: "good" };
+const stageChip = (label, stage) => `<span class="stage-chip t-${STAGE_TONE[stage]}">${esc(label)}</span>`;
+const days = (n) => `${n} day${n === 1 ? "" : "s"}`;
+
+async function loadLoop() {
+  const [s, work] = await Promise.all([api("/api/loop"), api(`/api/loop/worklist${loopStage ? `?stage=${loopStage}` : ""}`)]);
+  const pctOver = (st) => (st.count ? st.overdue / st.count : 0);
+  const rateBars = (rows, key) => rows.map((r) => `
+    <div class="hbar" data-tip="${esc(r[key])}: ${r.rate == null ? "group under 10, hidden" : `${fmt(r.overdue)} of ${fmt(r.open)} open episodes overdue`}">
+      <span>${esc(r[key])}</span><b>${r.rate == null ? "<10" : pct(r.rate, 0)}</b><div class="bar"><i class="${r.rate > 0.4 ? "hot" : ""}" style="width:${(r.rate ?? 0) * 100}%"></i></div></div>`).join("");
+  $("#loop").innerHTML = `
+    <section class="plan-hero loop-hero">
+      <div class="cap-ring" role="img" aria-label="${s.closed} of ${s.total} episodes closed with clinician sign-off">
+        <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="ring-bg"/><circle cx="50" cy="50" r="44" class="ring-fg" style="stroke-dasharray:${2 * Math.PI * 44};stroke-dashoffset:${2 * Math.PI * 44 * (1 - s.closed / s.total)}"/></svg>
+        <div><b>${counter(s.closed)}</b><span>closed loops</span></div></div>
+      <div class="plan-hero-copy">
+        <p class="hero-eyebrow">${icon("loop")} Invitation → result → diagnosis → signed closure</p>
+        <h2>No abnormal result left behind</h2>
+        <p class="plan-hero-sub">${fmt(s.total)} episodes from the last 8 weeks · as of ${new Date(s.today).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · targets set per stage</p>
+        <div class="plan-stats">
+          <div class="alarm"><b>${counter(s.abnormal_open)}</b><span>abnormal results open</span></div>
+          <div><b>${counter(s.abnormal_overdue)}</b><span>of them overdue</span></div>
+          <div><b>${counter(s.awaiting_signoff)}</b><span>await clinician sign-off</span></div>
+          <div><b>${counter(s.overdue)}</b><span>episodes past target</span></div>
+          <div><b>${s.median_days_to_close_abnormal ?? "–"}</b><span>median days, abnormal to closed</span></div>
+        </div>
+      </div>
+    </section>
+    <div class="card"><div class="card-head"><div><h2>Where patients are in the loop</h2><p class="card-sub">Select a stage to see who is stuck there · red = past the stage's target</p></div>
+      ${loopStage ? `<button class="btn ghost-dark" data-stage="">${icon("x")}Show all stages</button>` : ""}</div>
+      <ol class="funnel">${s.stages.map((st) => `
+        <li><button class="fstage ${loopStage === st.stage ? "on" : ""} ${st.stage === s.worst.stage ? "worst" : ""}" data-stage="${st.stage === "closed" ? "" : st.stage}" ${st.stage === "closed" ? "disabled" : ""}
+          aria-pressed="${loopStage === st.stage}" data-tip="${esc(st.label)}: ${fmt(st.count)} episodes, median ${st.median_days ?? 0} days here${st.sla ? `, target ${st.sla} days` : ""}">
+          <span class="fs-label">${esc(st.label)}</span><b>${fmt(st.count)}</b>
+          ${st.sla ? `<span class="fs-over ${st.overdue ? "" : "zero"}">${st.overdue ? `${fmt(st.overdue)} overdue` : "on track"}</span><span class="fs-sla">target ${st.sla} d</span>
+          <span class="fs-meter"><i style="width:${pctOver(st) * 100}%"></i></span>` : `<span class="fs-over zero">${icon("check")}signed off</span><span class="fs-sla">by a clinician</span>`}
+        </button></li>`).join("")}</ol></div>
+    <div class="loop-grid">
+      <div class="card brief" id="bottleneck">
+        <div class="brief-head"><div class="brief-title"><span class="brief-orb">${icon("loop")}</span>
+          <div><h2>Bottleneck analyst</h2><p class="card-sub">Gemini agent · finds where and why patients stall · every figure from code</p></div></div>
+          <button class="btn glow" data-analyse>${icon("spark")}Analyse now</button></div>
+        <div id="bottleneck-body"><p class="muted small">Biggest delay right now: <strong>${esc(s.worst.label)}</strong>, ${fmt(s.worst.overdue)} episodes past the ${s.worst.sla}-day target. Run the analyst for an explained brief and the first cases to act on.</p></div>
+      </div>
+      <div class="card feed">
+        <div class="card-head"><div><h2>Live EHR feed</h2><p class="card-sub">Lab systems push results; Wiqaya moves the loop and never closes it</p></div>
+          <span class="status good">${icon("feed")}Connected</span></div>
+        <div class="ifaces"><span>FHIR R4 <code>POST /api/fhir/Bundle</code></span><span>HL7 v2 ORU^R01 <code>POST /api/hl7</code></span><span>FHIR export <code>GET /api/fhir/Patient/{id}/$everything</code></span></div>
+        <button class="btn" data-feed>${icon("feed")}Receive a lab result (HL7 v2)</button>
+        <div id="feed-body"></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-head"><div><h2>Follow-up worklist${loopStage ? ` · ${esc(s.stages.find((x) => x.stage === loopStage).label)}` : ""}</h2>
+        <p class="card-sub">Past target, abnormal results first · each step explained · a coordinator approves before anyone is contacted</p></div>
+      <label class="field">Coordinator<input id="coord" value="${esc(coordinator)}" maxlength="80" autocomplete="name"></label></div>
+      ${work.length ? `<div class="table-wrap"><table class="wl"><thead><tr><th>Patient</th><th>Pathway</th><th>Stage</th><th>Overdue</th><th>Barriers</th><th>Suggested next step</th><th><span class="sr-only">Decision</span></th></tr></thead><tbody>
+        ${work.map(wlRow).join("")}</tbody></table></div>` : `<div class="rules-only">${icon("check")}<div><strong>Nothing overdue here</strong><p class="small muted">Every episode in this stage is within target.</p></div></div>`}
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="card-head"><div><h2>Delay by barrier</h2><p class="card-sub">Share of open episodes past target · groups under 10 hidden</p></div></div><div class="hbars">${rateBars(s.barriers, "barrier")}</div></div>
+      <div class="card"><div class="card-head"><div><h2>Delay by centre</h2><p class="card-sub">Share of open episodes past target</p></div></div><div class="hbars">${rateBars(s.centres, "centre")}</div></div>
+    </div>`;
+  countUp($("#loop"));
+  say("Care loop loaded");
+}
+
+function wlRow(w) {
+  const done = w.approvals.at(-1);
+  return `<tr class="${w.abnormal && ["resulted", "referred", "diagnosed"].includes(w.status.stage) ? "urgent" : ""}">
+    <td><button class="link" data-episode="${w.id}">${esc(w.name)}</button><span class="muted small">${w.id} · ${age(w.age)} · ${esc(w.centre)}</span></td>
+    <td>${chip(w.pathway)}</td>
+    <td>${stageChip(w.stage_label, w.status.stage)}${w.abnormal ? `<span class="status warn">${icon("alert")}Abnormal</span>` : ""}</td>
+    <td><b>${days(w.status.overdue)}</b><span class="muted small">waiting for ${esc(w.status.waiting_for)}</span></td>
+    <td>${w.barriers.map((b) => `<span class="bchip">${esc(b)}</span>`).join("") || '<span class="muted small">none recorded</span>'}</td>
+    <td><strong class="small">${esc(w.strategy.action)}</strong><span class="muted small">Why: ${esc(w.strategy.why)}</span></td>
+    <td class="wl-act">${done ? `<span class="status ${done.decision === "approve" ? "good" : "hide"}">${icon(done.decision === "approve" ? "check" : "x")}${done.decision === "approve" ? "Approved" : "Dismissed"}</span>`
+      : `<button class="btn sm" data-outreach="approve" data-id="${w.id}">${icon("check")}Approve</button><button class="btn sm ghost-dark" data-outreach="dismiss" data-id="${w.id}">Dismiss</button>`}</td></tr>`;
+}
+
+async function decideOutreach(id, decision, btn) {
+  coordinator = ($("#coord")?.value || coordinator).trim();
+  try {
+    const v = await post(`/api/episodes/${id}/outreach`, { coordinator, decision });
+    btn.closest("td").innerHTML = `<span class="status ${decision === "approve" ? "good" : "hide"}">${icon(decision === "approve" ? "check" : "x")}${decision === "approve" ? "Approved" : "Dismissed"}</span>`;
+    say(`${decision === "approve" ? "Approved" : "Dismissed"} outreach for ${v.name}`);
+  } catch (e) { say(e.message); alert(e.message); }
+}
+
+async function analyseBottlenecks() {
+  const card = $("#bottleneck"), box = $("#bottleneck-body");
+  card.classList.add("running");
+  box.innerHTML = `<div class="stages" role="status" aria-label="Agents working">${stages(["Supervisor", "Loop monitor", "Bottleneck analyst", "Safety & grounding"], 0.45)}</div><div class="shimmer"></div><div class="shimmer short"></div>`;
+  try {
+    const r = await api("/api/agent/bottlenecks");
+    renderModel(r.model);
+    const f = r.facts, lines = Object.entries(f.facts).filter(([k]) => f.used.includes(k));
+    box.innerHTML = `${f.lead ? `<div class="ai-quote"><span class="quote-k">${icon("spark")}AI summary · ${esc(r.model.model)}</span><p>${esc(f.lead)}</p></div>` : ""}
+      <ul class="fact-lines">${lines.map(([k, t]) => `<li>${icon("check")}<span>${esc(t)}</span>${f.picked.includes(k) ? `<span class="pick">${icon("spark")}AI pick</span>` : `<span class="verified">${icon(REQUIRED.bottlenecks.includes(k) ? "lock" : "check")}${REQUIRED.bottlenecks.includes(k) ? "Required" : "Verified"}</span>`}</li>`).join("")}</ul>
+      <div style="margin-top:10px">${sourceBadge(r)}</div>
+      <details class="replay"><summary>Agent trace · ${r.trace.length} steps</summary>${traceList(r.trace)}</details>`;
+    say("Bottleneck analysis ready");
+  } catch (e) { box.innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
+  finally { card.classList.remove("running"); }
+}
+
+async function receiveFeed() {
+  const box = $("#feed-body");
+  try {
+    const r = await post("/api/feed/demo", {});
+    const ok = r.ack.includes("MSA|AA"), ep = r.episode;
+    box.innerHTML = `<div class="hl7"><span class="hl7-k">Inbound HL7 v2 · ORU^R01</span><pre>${esc(r.message.replaceAll("\r", "\n"))}</pre>
+      <span class="hl7-k">Acknowledgement</span><pre>${esc(r.ack.replaceAll("\r", "\n"))}</pre></div>
+      <p class="small" style="margin-top:10px">${ok ? icon("check") : icon("alert")} <button class="link" data-episode="${ep.id}">${ep.id} · ${esc(ep.name)}</button> moved to ${stageChip(ep.stage_label, ep.status.stage)}
+        ${ep.abnormal ? `<span class="status warn">${icon("alert")}Abnormal: now on the worklist for referral</span>` : `<span class="status good">${icon("check")}Normal: waiting for clinician sign-off</span>`}</p>`;
+    say(`Lab result received for ${ep.id}`);
+    setTimeout(() => { if (!$("#loop").hidden) loadLoop().then(() => { $("#feed-body").innerHTML = box.innerHTML; }); }, 2500);
+  } catch (e) { box.innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
+}
+
+function timeline(ep) {
+  return `<ol class="tl">${ep.events.map((e) => `
+    <li class="tl-${STAGE_TONE[e.stage]}"><span class="tl-dot"></span><div>
+      <div class="tl-head"><strong>${esc({ invited: "Invited", booked: "Booked", attended: "Attended", resulted: "Result in", referred: "Referred", diagnosed: "Diagnostic done", closed: "Closed" }[e.stage])}</strong>
+        <span class="muted small">${new Date(e.on).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span><span class="badge">${esc(e.source)}</span></div>
+      <p class="small">${esc(e.detail)}${e.by ? ` <span class="muted">· signed by ${esc(e.by)}</span>` : ""}</p></div></li>`).join("")}
+    ${ep.status.stage !== "closed" ? `<li class="tl-next ${ep.status.overdue ? "late" : ""}"><span class="tl-dot"></span><div><div class="tl-head"><strong>Waiting for ${esc(ep.status.waiting_for)}</strong>
+      <span class="muted small">${days(ep.status.days)}${ep.status.sla ? ` · target ${ep.status.sla}` : ""}</span>${ep.status.overdue ? `<span class="status warn">${icon("clock")}${days(ep.status.overdue)} overdue</span>` : ""}</div></div></li>` : ""}</ol>`;
+}
+
+const RESOLUTION_OPTIONS = {
+  normal: [["normal-recall", "Normal result: routine recall scheduled"]],
+  diagnosed: [["diagnostic-negative", "Diagnostic test negative: return to routine screening"], ["diagnosis-treatment", "Diagnosis confirmed: treatment started"], ["specialist-referral", "Diagnosis confirmed: handed to specialist care"]],
+  declined: [["patient-declined", "Patient declined further tests (documented)"]],
+};
+function signoffOptions(ep) {
+  const s = ep.status.stage;
+  if (s === "resulted" && !ep.abnormal) return RESOLUTION_OPTIONS.normal;
+  if (s === "diagnosed") return RESOLUTION_OPTIONS.diagnosed;
+  if (ep.abnormal && (s === "resulted" || s === "referred")) return RESOLUTION_OPTIONS.declined;
+  return [];
+}
+
+async function openEpisode(id) {
+  const ep = await api(`/api/episodes/${id}`);
+  const opts = signoffOptions(ep), dlg = $("#episode");
+  dlg.innerHTML = `
+    <div class="drawer-head"><div><p class="eyebrow">${ep.id} · ${esc(ep.centre)}</p><h2 id="ep-title">${esc(ep.name)} <span class="muted" style="font-weight:500">${age(ep.age)}</span></h2>
+      <div class="consents">${chip(ep.pathway)}${stageChip(ep.stage_label, ep.status.stage)}${ep.abnormal ? `<span class="status warn">${icon("alert")}Abnormal result</span>` : ""}</div></div>
+      <button class="icon-btn" data-close-drawer aria-label="Close">${icon("x")}</button></div>
+    ${timeline(ep)}
+    ${ep.strategy ? `<div class="sub-panel"><h3 class="small">Suggested next step</h3><p><strong>${esc(ep.strategy.action)}</strong></p><p class="small muted">Why: ${esc(ep.strategy.why)}${ep.barriers.length ? ` · barriers: ${ep.barriers.map(esc).join(", ")}` : ""}</p>
+      ${ep.approvals.map((a) => `<p class="small"><span class="status ${a.decision === "approve" ? "good" : "hide"}">${a.decision === "approve" ? "Approved" : "Dismissed"}</span> by ${esc(a.by)} on ${esc(a.on)}</p>`).join("")}</div>` : ""}
+    ${ep.resolution ? `<div class="sub-panel done"><h3 class="small">${icon("check")} Closed by ${esc(ep.resolution.by)}</h3><p>${esc(ep.resolution.label)}</p>${ep.resolution.note ? `<p class="small muted">${esc(ep.resolution.note)}</p>` : ""}</div>`
+      : opts.length ? `<form id="signoff" class="signoff" data-id="${ep.id}"><h3>Clinician sign-off</h3>
+        <p class="small muted">${opts[0][0] === "patient-declined" ? "An abnormal result can only close after a diagnostic report. If the patient declines, document it here." : "Only a named clinician can close the loop. This is recorded on the episode."}</p>
+        <label class="field">Resolution<select name="resolution" required>${opts.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>
+        <label class="field">Clinician<input name="clinician" required minlength="3" maxlength="80" placeholder="e.g. Dr. Al Mansoori" autocomplete="name"></label>
+        <label class="field">Note${opts[0][0] === "patient-declined" ? " (required)" : ""}<textarea name="note" rows="2" maxlength="500" ${opts[0][0] === "patient-declined" ? 'required minlength="10"' : ""}></textarea></label>
+        <button class="btn" type="submit">${icon("check")}Sign off and close</button><p class="small" id="signoff-msg" role="status"></p></form>`
+      : `<p class="small muted" style="margin-top:12px">${icon("lock")} This episode can be signed off once a ${ep.abnormal ? "diagnostic report" : "result"} arrives.</p>`}
+    <p style="margin-top:14px"><button class="btn ghost-dark" data-person="${ep.person_id}">${icon("person")}Open person</button>
+      <a class="btn ghost-dark" href="/api/fhir/Patient/${ep.person_id}/$everything" target="_blank" rel="noopener">${icon("feed")}FHIR record</a></p>`;
+  if (!dlg.open) dlg.showModal();
+}
+
+async function submitSignoff(form) {
+  const d = Object.fromEntries(new FormData(form));
+  try {
+    await post(`/api/episodes/${form.dataset.id}/close`, d);
+    say("Episode closed");
+    await openEpisode(form.dataset.id);
+    if (!$("#loop").hidden) loadLoop();
+  } catch (e) { $("#signoff-msg").textContent = e.message; }
+}
+
+function personLoop(v) {
+  if (!v.care_loop.length) return "";
+  return `<div class="card"><div class="card-head"><div><h2>Care loop</h2><p class="card-sub">Every invitation for this person, through to a signed closure</p></div><span class="badge">FHIR · HL7</span></div>
+    <div class="ploop">${v.care_loop.map((ep) => `
+      <button class="ploop-row" data-episode="${ep.id}"><span>${chip(ep.pathway)}</span>
+        <span class="ploop-track">${["invited", "booked", "attended", "resulted", "referred", "diagnosed", "closed"].filter((s) => s !== "referred" && s !== "diagnosed" || ep.abnormal)
+          .map((s) => `<i class="${ep.events.some((e) => e.stage === s) ? "on" : ""}" title="${s}"></i>`).join("")}</span>
+        ${stageChip(ep.stage_label, ep.status.stage)}${ep.status.overdue ? `<span class="status warn">${icon("clock")}${days(ep.status.overdue)} overdue</span>` : ""}</button>`).join("")}</div></div>`;
+}
+
 /* ---------- Events ---------- */
 document.addEventListener("click", async (ev) => {
-  const t = ev.target.closest("[data-view],[data-person],[data-dim],[data-decide],[data-open-top],[data-ask],[data-brief],[data-copy-brief],[data-plan-kind],[data-plan-lang]");
+  const t = ev.target.closest("[data-view],[data-person],[data-dim],[data-decide],[data-open-top],[data-ask],[data-brief],[data-copy-brief],[data-plan-kind],[data-plan-lang],[data-episode],[data-stage],[data-outreach],[data-analyse],[data-feed],[data-close-drawer]");
   if (!t) return;
+  if (t.dataset.episode) { if (t.dataset.person == null) openEpisode(t.dataset.episode); return; }
+  if (t.hasAttribute("data-close-drawer")) { $("#episode").close(); return; }
+  if (t.dataset.stage != null) { loopStage = t.dataset.stage || null; loadLoop(); return; }
+  if (t.dataset.outreach) { decideOutreach(t.dataset.id, t.dataset.outreach, t); return; }
+  if (t.hasAttribute("data-analyse")) { analyseBottlenecks(); return; }
+  if (t.hasAttribute("data-feed")) { receiveFeed(); return; }
   if (t.dataset.planKind || t.dataset.planLang) {
     planFilter = { kind: t.dataset.planKind ?? planFilter.kind, lang: t.dataset.planLang ?? planFilter.lang };
     applyPlanFilter();
@@ -733,8 +924,8 @@ document.addEventListener("click", async (ev) => {
     t.innerHTML = `${icon("check")}Copied`;
   } else if (t.dataset.ask) { showTab("copilot"); ask(t.dataset.ask); }
   else if (t.dataset.brief) caseBrief(Number(t.dataset.brief));
-  else if (t.dataset.view) showTab(t.dataset.view);
-  else if (t.dataset.person) openPerson(Number(t.dataset.person));
+  else if (t.dataset.view) { if ($("#episode").open) $("#episode").close(); showTab(t.dataset.view); }
+  else if (t.dataset.person) { if ($("#episode").open) $("#episode").close(); openPerson(Number(t.dataset.person)); }
   else if (t.dataset.dim) { dimension = t.dataset.dim; loadSafeguards(); }
   else if (t.hasAttribute("data-open-top")) { const first = $("#plan [data-person]"); if (first) openPerson(Number(first.dataset.person)); }
   else if (t.dataset.decide) {
@@ -747,6 +938,7 @@ document.addEventListener("click", async (ev) => {
 });
 
 document.addEventListener("submit", (ev) => {
+  if (ev.target.id === "signoff") { ev.preventDefault(); submitSignoff(ev.target); return; }
   if (ev.target.id !== "ask-form") return;
   ev.preventDefault();
   const q = $("#ask-input").value.trim();

@@ -2,8 +2,9 @@
 
 Future Health Digital Innovation Challenge, Population Health. Wiqaya finds children, adults and
 households with care gaps or elevated risk, and fills each primary-care centre's real weekly slots
-with the households where an invitation does the most good. Every flag shows the consented data
-behind it.
+with the households where an invitation does the most good. Every invitation is then tracked through
+booking, result, referral and diagnosis to a clinician-signed closure, so no abnormal result is lost to
+follow-up. Every flag shows the consented data behind it.
 
 **All data is synthetic** (about 41,700 people in 12,000 households). No real records are used.
 
@@ -14,7 +15,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8099     # open http://localhost:8099
 echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses Ollama
-.venv/bin/python -m pytest -q                  # 46 tests, no model or key needed
+.venv/bin/python -m pytest -q                  # 56 tests, no model or key needed
 ```
 
 `WIQAYA_HOUSEHOLDS` sets the population size (default 12000; startup takes about 5 s).
@@ -22,10 +23,30 @@ echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses
 ## Deploy (Google Cloud Run)
 
 ```bash
-PROJECT_ID=<your-project> deploy/cloudrun.sh   # reads GEMINI_API_KEY from .env into Secret Manager
+PROJECT_ID=<your-project> deploy/cloudrun.sh   # reads GEMINI_API_KEY and WIQAYA_INGEST_TOKEN from .env into Secret Manager
 ```
 
 Live demo: https://wiqaya-242709395679.me-central1.run.app (no login). Code report: `docs/CODE_REPORT.md`.
+
+## Screening-to-care loop and EHR interfaces
+
+Every invitation becomes a care episode: **Invited → Booked → Attended → Result in → Referred → Diagnostic done → Closed**
+(normal results skip referral). Each stage has a target in days (`app/loop.py`, placeholders for the care-coordination team).
+
+- **Inbound EHR events** move an episode one legal step forward and never close it:
+  FHIR R4 `POST /api/fhir/Bundle` (Appointment, Encounter, Observation, ServiceRequest, DiagnosticReport; one
+  OperationOutcome issue per entry) and HL7 v2 `POST /api/hl7` (ORU^R01 lab results, answered with an ACK, AA or AE).
+  Both need `Authorization: Bearer $WIQAYA_INGEST_TOKEN`; with no token configured, ingest is off (503).
+  Messages name their episode with FHIR `basedOn` or HL7 OBR-2 (placer order number).
+- **Outbound:** `GET /api/fhir/Patient/{id}/$everything` returns a consent-filtered FHIR Bundle with a Task per episode.
+- **Human oversight:** only a named clinician closes an episode (`POST /api/episodes/{id}/close`). An abnormal result
+  closes only after a diagnostic report, or as a documented patient decline. Coordinators approve or dismiss each
+  suggested outreach step; nothing is sent automatically.
+- **Bottleneck analyst:** a Gemini agent (`/api/agent/bottlenecks`, or ask "where are patients stalling?") reads the loop
+  summary and worklist, and explains the worst stage, open abnormal results, the barrier most linked to delay and the
+  first cases to act on. Barrier and centre rates are hidden for groups under 10.
+- The past 8 weeks are simulated against the hidden truth, as if their FHIR/HL7 events had arrived.
+  The **Receive a lab result** button sends a generated ORU^R01 through the real HL7 path.
 
 ## AI: multi-agent copilot
 
@@ -64,6 +85,7 @@ editable source: `docs/architecture/wiqaya-runtime.archify.json`.
 
 | Tab | What you see |
 | --- | --- |
+| Care loop | Funnel from invitation to signed closure with overdue counts per stage; the Gemini bottleneck analyst; a live HL7 feed; the follow-up worklist with explained next steps and coordinator approval; delay by barrier and centre; an episode timeline with clinician sign-off |
 | Ask Wiqaya | Ask in plain language; see the answer, the data the analyst tool returned and the full agent trace |
 | Weekly plan | One centre's 150 slots filled with whole households, ranked by benefit per slot, with back-to-back times that skip the midday prayer window |
 | Person | Care gaps (rules) kept separate from the risk score (model), an 80% interval, top factors, invitation lift, the data used or withheld, the household messages, and accept/change/decline for the clinician |
@@ -79,8 +101,10 @@ editable source: `docs/architecture/wiqaya-runtime.archify.json`.
 | `app/model.py` | Numpy logistic risk model trained **only on screened people** (bias correction), bootstrap intervals, exact additive explanations; T-learner invitation-lift model from past randomised outreach |
 | `app/engine.py` | Priority = need × invitation lift, among people with a care gap; the weekly household plan; the calendar comparison policy; outcome scoring |
 | `app/outreach.py` | Approved templates in Arabic and English; private messages unless the adult opted in to family messages; adolescents 14+ with their own contact get a confidential message; genomic findings never named |
+| `app/loop.py` | Care episodes, stage targets, legal transitions, clinician closure rules, barriers, outreach strategies, funnel summary and worklist |
+| `app/interop.py` | FHIR R4 bundle ingest and export, HL7 v2 ORU^R01 parsing and ACKs |
 | `app/safeguards.py` | Segment table, reach gate, small-cell suppression with a complementary cell |
-| `app/agents.py` | Multi-agent copilot: supervisor, query planner, verifier, analyst tool, writers, outreach checker, safety and grounding |
+| `app/agents.py` | Multi-agent copilot: supervisor, query planner, verifier, analyst tool, writers, outreach checker, bottleneck analyst, safety and grounding |
 | `app/llm.py` | Gemini client (Ollama on local runs only) with timeouts; returns None so callers fall back |
 | `app/main.py` | FastAPI endpoints (`/api/agent/ask`, `/api/agent/brief/{id}` included) and the static UI |
 
@@ -110,5 +134,9 @@ Bias check: for adults never screened, true risk is 7.8%; a naive model predicts
   a data-processing agreement and in-region processing.
 - For local Ollama runs, `gemma3:1b` is too small for the planner and writer roles; use `gemma3:4b` or larger.
 - AI endpoints are limited to 20 requests a minute per client (`WIQAYA_ASK_LIMIT`), per process.
-- End-to-end Selenium suite (72 tests) lives in the separate `wiqaya-qa` repository.
-- Clinician decisions are kept in memory (lost on restart). No authentication: demo only.
+- End-to-end Selenium suite (81 tests) lives in the separate `wiqaya-qa` repository.
+- Clinician decisions, care episodes and sign-offs are kept in memory (lost on restart); a pilot stores them as FHIR Tasks in the EHR.
+- No user login: the demo is open to guests and the clinician name on a sign-off is typed, not authenticated.
+  A pilot needs DoH single sign-on with clinician and coordinator roles.
+- EHR ingest uses one shared bearer token; a pilot adds mutual TLS from the interface engine and Malaffi onboarding.
+- Pathway codes use a local code system; they must be mapped to DoH-approved LOINC and SNOMED CT sets.

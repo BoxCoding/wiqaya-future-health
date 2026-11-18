@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 
 import numpy as np
 
-from . import data, model, outreach, rules
+from . import data, loop, model, outreach, rules
 from .safeguards import DIMENSIONS, HIGH_RISK, MIN_CELL
 
 SLOTS_PER_WEEK = 150  # per centre; invitations are paced to real capacity
@@ -55,6 +55,12 @@ class Engine:
         self.slot_of = {m["id"]: m["slot"] for plan in self.plans.values() for h in plan for m in h["members"]}
         self.contacted = set(self.slot_of)
         self.decisions = []  # shortcut: in-memory, lost on restart; store in PostgreSQL for the pilot
+        self.episodes = loop.simulate(self)  # shortcut: in-memory like decisions; the pilot keeps FHIR Tasks in the EHR
+        self.episode = {ep["id"]: ep for ep in self.episodes}
+        self.feed_log = []  # demo HL7 messages received this run
+        self.episodes_of = defaultdict(list)
+        for ep in self.episodes:
+            self.episodes_of[ep["person_id"]].append(ep)
 
     def need(self, p):
         """Adults: modelled risk. Children: rules only in this prototype (no paediatric model yet)."""
@@ -150,6 +156,7 @@ class Engine:
             messages=[m for m in outreach.compose(household, self.gaps, self.slot_of)
                       if not m["private"] or m["to_id"] == pid],
             decisions=[d for d in self.decisions if d["person_id"] == pid],
+            care_loop=[loop.view(ep, p) for ep in self.episodes_of[pid]],
         )
 
     def query(self, spec):
