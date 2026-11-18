@@ -6,6 +6,7 @@ const say = (msg) => { $("#status").textContent = msg; };
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
+  if (r.status === 401 && !path.startsWith("/api/auth/")) { showLogin("Your session ended. Sign in again."); throw new Error("Signed out"); }
   if (!r.ok) throw new Error(`${r.status}: ${(await r.json().catch(() => ({}))).detail ?? r.statusText}`);
   return r.json();
 }
@@ -42,6 +43,7 @@ const VIEWS = {
   person: ["Person", "person", "Person and household", "Care gaps from rules, risk from the model with its uncertainty, the data behind each flag, and the exact messages the household will receive."],
   safeguards: ["Safeguards", "shield", "Population safeguards", "Reach and calibration across segments of the local population, with a release gate and small-cell suppression."],
   outcomes: ["Outcomes", "chart", "Outcomes and evaluation", "The same clinic capacity under two policies, scored against the synthetic ground truth."],
+  audit: ["Audit log", "lock", "Audit log", "Every sign-in, record view, change and inbound message, hash-chained so any edited or deleted row shows up."],
 };
 
 const SHORT = { "Well-Child Visit + developmental assessment": "WCV + developmental", "Genetic counselling, then enhanced surveillance": "Genetic counselling" };
@@ -53,7 +55,10 @@ const avatar = (m, lg = "") => `<span class="av ${m.age < 18 ? "child" : ""} ${l
 const LANG = { ar: "Arabic", en: "English" };
 const CHIP_LEGEND = `<div class="legend"><span><span class="sw" style="background:var(--s3)"></span>Child pathway</span><span><span class="sw" style="background:var(--s1)"></span>Adult screening</span><span><span class="sw" style="background:var(--s7)"></span>Genomic</span></div>`;
 
-let overview, outcomes, regions, loopSummary, currentPerson, dimension = "nationality";
+let overview, outcomes, regions, loopSummary, currentPerson, dimension = "nationality", me = null;
+const RECORD_ROLES = ["clinician", "coordinator"];
+const can = (...roles) => !!me && roles.includes(me.role);
+const VIEW_ROLES = { plan: RECORD_ROLES, person: RECORD_ROLES, audit: ["admin"] };  // other views: every role
 
 function showTab(id) {
   const [, , title, sub] = VIEWS[id];
@@ -70,11 +75,15 @@ function showTab(id) {
   if (id === "safeguards") loadSafeguards();
   if (id === "outcomes") renderOutcomes();
   if (id === "loop") loadLoop();
+  if (id === "audit") loadAudit();
 }
 
 async function init() {
-  $("#nav").innerHTML = Object.entries(VIEWS).map(([id, [label, ic]], i) =>
+  $("#nav").innerHTML = Object.entries(VIEWS).filter(([id]) => !VIEW_ROLES[id] || can(...VIEW_ROLES[id])).map(([id, [label, ic]], i) =>
     `<button role="tab" id="tab-${id}" aria-controls="${id}" aria-selected="${i === 0}" data-view="${id}">${icon(ic)}${label}</button>`).join("");
+  $("#user-box").hidden = false;
+  $("#user-box").innerHTML = `<span class="av" aria-hidden="true">${esc(me.name[0])}</span><span><strong>${esc(me.name)}</strong><small>${esc(me.role_label)}</small></span>
+    <button class="icon-btn" data-logout aria-label="Sign out" title="Sign out">${icon("x")}</button>`;
   renderCopilot();
   $("#person").innerHTML = `<div class="card empty">${icon("person")}<p>Pick anyone from the weekly plan to see why they were invited.</p><button class="btn" data-open-top>Open the top-ranked household</button></div>`;
   [overview, outcomes, regions, loopSummary] = await Promise.all([api("/api/overview"), api("/api/outcomes"), api("/api/safeguards?dimension=region"), api("/api/loop")]);
@@ -83,7 +92,7 @@ async function init() {
   $("#centre").addEventListener("change", () => loadPlan($("#centre").value));
   renderOverview();
   showTab("overview");
-  await loadPlan(overview.centres[0]);
+  if (can(...RECORD_ROLES)) await loadPlan(overview.centres[0]);
   api("/api/agent/status").then(renderModel).catch(() => renderModel({ online: false }));
 }
 
@@ -133,7 +142,7 @@ function renderOverview() {
         <p class="hero-eyebrow">Future Health Challenge · Population Health · Abu Dhabi</p>
         <h1 class="hero-title">Prevention that reaches the right family, <span>first.</span></h1>
         <p class="hero-sub">Wiqaya finds children and adults with unmet preventive care, invites the households an invitation will actually help, and explains every decision, in Arabic and English.</p>
-        <div class="hero-cta"><button class="btn glow" data-view="loop">${icon("loop")}Open the care loop</button><button class="btn ghost" data-view="plan">${icon("plan")}This week's plan</button><button class="btn ghost" data-view="copilot">${icon("spark")}Ask Wiqaya</button></div>
+        <div class="hero-cta"><button class="btn glow" data-view="loop">${icon("loop")}Open the care loop</button>${can(...RECORD_ROLES) ? `<button class="btn ghost" data-view="plan">${icon("plan")}This week's plan</button>` : ""}<button class="btn ghost" data-view="copilot">${icon("spark")}Ask Wiqaya</button></div>
         <div class="hero-chips"><span>${icon("clock")}Week of 26 Oct 2026</span><span id="hero-model">${icon("spark")}AI agents</span><span>${icon("lock")}Synthetic data only</span></div>
       </div>
       <div class="hero-panel">
@@ -325,7 +334,7 @@ async function openPerson(id) {
     <div class="card brief" id="brief">
       <div class="brief-head"><div class="brief-title"><span class="brief-orb">${icon("spark")}</span>
         <div><h2>AI case brief</h2><p class="card-sub">Multi-agent review for the clinician · every figure verified by code</p></div></div>
-        <button class="btn glow" data-brief="${id}">${icon("spark")}Generate brief</button></div>
+        ${can("clinician") ? `<button class="btn glow" data-brief="${id}">${icon("spark")}Generate brief</button>` : '<span class="status hide">Clinicians generate briefs</span>'}</div>
       <div id="brief-body"><div class="brief-idle">${[["person", "Case reviewer", "Frames why this person was flagged"], ["msg", "Outreach checker", "Confirms messages are approved templates"], ["shield", "Safety & grounding", "Blocks invented numbers, names and claims"]]
         .map(([ic, a, d]) => `<div class="idle-step"><span class="lane-ic">${icon(ic)}</span><div><strong>${a}</strong><br><span class="muted small">${d}</span></div></div>`).join("")}</div></div>
     </div>
@@ -340,7 +349,7 @@ async function openPerson(id) {
             ${ep ? "" : `<div class="od-track" data-tip="${fmt(g.overdue_days)} days overdue"><i class="k-${kind(g.pathway)}" style="width:${Math.max(Math.min(g.overdue_days / OVERDUE_CAP, 1) * 100, 3)}%"></i></div>`}
             <p class="small">${ep ? `Screened ${esc(seen.on)}; follow-up is tracked in the care loop.` : esc(g.reason)} <span class="muted">· data: ${g.data.map(esc).join(", ")}</span></p>
             <div class="seg-group" role="group" aria-label="Clinician decision on ${esc(g.pathway)}">${["accept", "change", "decline"].map((a) => `
-              <button data-decide="${a}" data-pathway="${esc(g.pathway)}" aria-pressed="${v.decisions.some((d) => d.pathway === g.pathway && d.action === a)}">${icon(a === "accept" ? "check" : a === "change" ? "pen" : "x")}${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}</div>
+              <button data-decide="${a}" data-pathway="${esc(g.pathway)}" ${can("clinician") ? "" : 'disabled title="Clinicians decide"'} aria-pressed="${v.decisions.some((d) => d.pathway === g.pathway && d.action === a)}">${icon(a === "accept" ? "check" : a === "change" ? "pen" : "x")}${a[0].toUpperCase() + a.slice(1)}</button>`).join("")}</div>
           </div>`;
         }).join("")}</div>` : `<div class="rules-only">${icon("check")}<div><strong>Nothing overdue</strong><p class="small muted">No care gaps for this person this week.</p></div></div>`}
         <p class="small muted" style="margin-top:12px">Schedules are placeholders for the DoH-approved guidelines.</p></div>
@@ -583,7 +592,7 @@ function renderCopilot() {
         <span class="ask-ic">${icon("spark")}</span>
         <input id="ask-input" maxlength="400" autocomplete="off" placeholder="Ask about care gaps, a person, or fairness…">
         <button class="btn glow" type="submit">Ask ${icon("up")}</button></form>
-      <div class="ex-grid">${EXAMPLES.map(([ic, tag, q]) => `<button class="ex-card" data-ask="${esc(q)}"><span class="ex-tag">${icon(ic)}${tag}</span><span>${esc(q)}</span></button>`).join("")}</div>
+      <div class="ex-grid">${EXAMPLES.filter(([, tag]) => tag !== "Case" || can(...RECORD_ROLES)).map(([ic, tag, q]) => `<button class="ex-card" data-ask="${esc(q)}"><span class="ex-tag">${icon(ic)}${tag}</span><span>${esc(q)}</span></button>`).join("")}</div>
     </section>
     <div id="thread" class="thread" aria-live="polite"></div>`;
   renderModel(modelInfo);
@@ -720,14 +729,15 @@ async function caseBrief(id) {
 }
 
 /* ---------- Care loop ---------- */
-let loopStage = null, coordinator = "Care coordinator";
+let loopStage = null;
 const STAGE_TONE = { invited: "s1", booked: "s1", attended: "s3", resulted: "s7", referred: "s2", diagnosed: "s2", closed: "good" };
 const stageChip = (label, stage) => `<span class="stage-chip t-${STAGE_TONE[stage]}">${esc(label)}</span>`;
 const days = (n) => `${n} day${n === 1 ? "" : "s"}`;
 
 async function loadLoop() {
-  const [s, work] = await Promise.all([api("/api/loop"), api(`/api/loop/worklist${loopStage ? `?stage=${loopStage}` : ""}`)]);
+  const [s, work] = await Promise.all([api("/api/loop"), can(...RECORD_ROLES) ? api(`/api/loop/worklist${loopStage ? `?stage=${loopStage}` : ""}`) : null]);
   const kept = { b: $("#bottleneck-body")?.innerHTML, f: $("#feed-body")?.innerHTML };  // a refresh keeps the analyst brief and feed log
+  const mon = await api("/api/loop/alerts");
   const pctOver = (st) => (st.count ? st.overdue / st.count : 0);
   const rateBars = (rows, key) => rows.map((r) => `
     <div class="hbar" data-tip="${esc(r[key])}: ${r.rate == null ? "group under 10, hidden" : `${fmt(r.overdue)} of ${fmt(r.open)} open episodes overdue`}">
@@ -759,27 +769,32 @@ async function loadLoop() {
           ${st.sla ? `<span class="fs-over ${st.overdue ? "" : "zero"}">${st.overdue ? `${fmt(st.overdue)} overdue` : "on track"}</span><span class="fs-sla">target ${st.sla} d</span>
           <span class="fs-meter"><i style="width:${pctOver(st) * 100}%"></i></span>` : `<span class="fs-over zero">${icon("check")}signed off</span><span class="fs-sla">by a clinician</span>`}
         </button></li>`).join("")}</ol></div>
+    <div class="card alerts"><div class="card-head"><div><h2>${icon("alert")} Monitor alerts</h2>
+        <p class="card-sub">The monitor re-checks the loop after every inbound result and every ${Math.round(mon.every_minutes)} minutes · last check ${mon.last_scan ? esc(new Date(mon.last_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })) : "pending"}</p></div></div>
+      <ul class="alert-list">${mon.alerts.slice(0, 6).map((a) => `<li class="al-${a.level}"><span class="al-dot"></span><span>${a.episode && can(...RECORD_ROLES) ? `<button class="link" data-episode="${a.episode}">${esc(a.text)}</button>` : esc(a.text)}</span>
+        <span class="muted small">${esc(new Date(a.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }))}</span></li>`).join("") || '<li class="muted small">No alerts yet.</li>'}</ul></div>
     <div class="loop-grid">
       <div class="card brief" id="bottleneck">
         <div class="brief-head"><div class="brief-title"><span class="brief-orb">${icon("loop")}</span>
           <div><h2>Bottleneck analyst</h2><p class="card-sub">Gemini agent · finds where and why patients stall · every figure from code</p></div></div>
           <button class="btn glow" data-analyse>${icon("spark")}Analyse now</button></div>
-        <div id="bottleneck-body"><p class="muted small">Biggest delay right now: <strong>${esc(s.worst.label)}</strong>, ${fmt(s.worst.overdue)} episodes past the ${s.worst.sla}-day target. Run the analyst for an explained brief and the first cases to act on.</p></div>
+        <div id="bottleneck-body">${mon.auto_brief ? briefHtml(mon.auto_brief, `Automatic analysis · ${new Date(mon.auto_brief.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`)
+          : `<p class="muted small">Biggest delay right now: <strong>${esc(s.worst.label)}</strong>, ${fmt(s.worst.overdue)} episodes past the ${s.worst.sla}-day target.</p>`}</div>
       </div>
       <div class="card feed">
         <div class="card-head"><div><h2>Live EHR feed</h2><p class="card-sub">Lab systems push results; Wiqaya moves the loop and never closes it</p></div>
           <span class="status good">${icon("feed")}Connected</span></div>
         <div class="ifaces"><span>FHIR R4 <code>POST /api/fhir/Bundle</code></span><span>HL7 v2 ORU^R01 <code>POST /api/hl7</code></span><span>FHIR export <code>GET /api/fhir/Patient/{id}/$everything</code></span></div>
-        <button class="btn" data-feed>${icon("feed")}Receive a lab result (HL7 v2)</button>
+        ${can(...RECORD_ROLES) ? `<button class="btn" data-feed>${icon("feed")}Receive a lab result (HL7 v2)</button>` : ""}
         <div id="feed-body"></div>
       </div>
     </div>
+    ${!work ? `<div class="card rules-only">${icon("lock")}<div><strong>Named worklist hidden for your role</strong><p class="small muted">Clinicians and care coordinators see who to follow up. Population roles see the totals above.</p></div></div>` : `
     <div class="card"><div class="card-head"><div><h2>Follow-up worklist${loopStage ? ` · ${esc(s.stages.find((x) => x.stage === loopStage).label)}` : ""}</h2>
-        <p class="card-sub">Past target, abnormal results first · each step explained · a coordinator approves before anyone is contacted</p></div>
-      <label class="field">Coordinator<input id="coord" value="${esc(coordinator)}" maxlength="80" autocomplete="name"></label></div>
+        <p class="card-sub">Past target, abnormal results first · each step explained · a coordinator approves before anyone is contacted</p></div></div>
       ${work.length ? `<div class="table-wrap"><table class="wl"><thead><tr><th>Patient</th><th>Pathway</th><th>Stage</th><th>Overdue</th><th>Barriers</th><th>Suggested next step</th><th><span class="sr-only">Decision</span></th></tr></thead><tbody>
         ${work.map(wlRow).join("")}</tbody></table></div>` : `<div class="rules-only">${icon("check")}<div><strong>Nothing overdue here</strong><p class="small muted">Every episode in this stage is within target.</p></div></div>`}
-    </div>
+    </div>`}
     <div class="grid2">
       <div class="card"><div class="card-head"><div><h2>Delay by barrier</h2><p class="card-sub">Share of open episodes past target · groups under 10 hidden</p></div></div><div class="hbars">${rateBars(s.barriers, "barrier")}</div></div>
       <div class="card"><div class="card-head"><div><h2>Delay by centre</h2><p class="card-sub">Share of open episodes past target</p></div></div><div class="hbars">${rateBars(s.centres, "centre")}</div></div>
@@ -800,16 +815,24 @@ function wlRow(w) {
     <td>${w.barriers.map((b) => `<span class="bchip">${esc(b)}</span>`).join("") || '<span class="muted small">none recorded</span>'}</td>
     <td><strong class="small">${esc(w.strategy.action)}</strong><span class="muted small">Why: ${esc(w.strategy.why)}</span></td>
     <td class="wl-act">${done ? `<span class="status ${done.decision === "approve" ? "good" : "hide"}">${icon(done.decision === "approve" ? "check" : "x")}${done.decision === "approve" ? "Approved" : "Dismissed"}</span>`
-      : `<button class="btn sm" data-outreach="approve" data-id="${w.id}">${icon("check")}Approve</button><button class="btn sm ghost-dark" data-outreach="dismiss" data-id="${w.id}">Dismiss</button>`}</td></tr>`;
+      : can("coordinator") ? `<button class="btn sm" data-outreach="approve" data-id="${w.id}">${icon("check")}Approve</button><button class="btn sm ghost-dark" data-outreach="dismiss" data-id="${w.id}">Dismiss</button>`
+      : '<span class="muted small">Awaiting coordinator</span>'}</td></tr>`;
 }
 
 async function decideOutreach(id, decision, btn) {
-  coordinator = ($("#coord")?.value || coordinator).trim();
   try {
-    const v = await post(`/api/episodes/${id}/outreach`, { coordinator, decision });
+    const v = await post(`/api/episodes/${id}/outreach`, { decision });
     btn.closest("td").innerHTML = `<span class="status ${decision === "approve" ? "good" : "hide"}">${icon(decision === "approve" ? "check" : "x")}${decision === "approve" ? "Approved" : "Dismissed"}</span>`;
     say(`${decision === "approve" ? "Approved" : "Dismissed"} outreach for ${v.name}`);
   } catch (e) { say(e.message); alert(e.message); }
+}
+
+function briefHtml(r, label) {
+  const f = r.facts, lines = Object.entries(f.facts).filter(([k]) => f.used.includes(k));
+  return `${f.lead ? `<div class="ai-quote"><span class="quote-k">${icon("spark")}${esc(label)}</span><p>${esc(f.lead)}</p></div>` : `<p class="small muted">${esc(label)}</p>`}
+    <ul class="fact-lines">${lines.map(([k, t]) => `<li>${icon("check")}<span>${esc(t)}</span>${f.picked.includes(k) ? `<span class="pick">${icon("spark")}AI pick</span>` : `<span class="verified">${icon(REQUIRED.bottlenecks.includes(k) ? "lock" : "check")}${REQUIRED.bottlenecks.includes(k) ? "Required" : "Verified"}</span>`}</li>`).join("")}</ul>
+    <div style="margin-top:10px">${sourceBadge(r)}</div>
+    <details class="replay"><summary>Agent trace · ${r.trace.length} steps</summary>${traceList(r.trace)}</details>`;
 }
 
 async function analyseBottlenecks() {
@@ -818,12 +841,7 @@ async function analyseBottlenecks() {
   try {
     const r = await api("/api/agent/bottlenecks");
     renderModel(r.model);
-    const box = $("#bottleneck-body");  // look it up again: a refresh may have re-rendered the card meanwhile
-    const f = r.facts, lines = Object.entries(f.facts).filter(([k]) => f.used.includes(k));
-    box.innerHTML = `${f.lead ? `<div class="ai-quote"><span class="quote-k">${icon("spark")}AI summary · ${esc(r.model.model)}</span><p>${esc(f.lead)}</p></div>` : ""}
-      <ul class="fact-lines">${lines.map(([k, t]) => `<li>${icon("check")}<span>${esc(t)}</span>${f.picked.includes(k) ? `<span class="pick">${icon("spark")}AI pick</span>` : `<span class="verified">${icon(REQUIRED.bottlenecks.includes(k) ? "lock" : "check")}${REQUIRED.bottlenecks.includes(k) ? "Required" : "Verified"}</span>`}</li>`).join("")}</ul>
-      <div style="margin-top:10px">${sourceBadge(r)}</div>
-      <details class="replay"><summary>Agent trace · ${r.trace.length} steps</summary>${traceList(r.trace)}</details>`;
+    $("#bottleneck-body").innerHTML = briefHtml(r, `AI summary · ${r.model.model ?? "rules"}`);  // looked up again: a refresh may have re-rendered the card
     say("Bottleneck analysis ready");
   } catch (e) { $("#bottleneck-body").innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
   finally { $("#bottleneck")?.classList.remove("running"); }
@@ -876,17 +894,33 @@ async function openEpisode(id) {
     ${timeline(ep)}
     ${ep.strategy ? `<div class="sub-panel"><h3 class="small">Suggested next step</h3><p><strong>${esc(ep.strategy.action)}</strong></p><p class="small muted">Why: ${esc(ep.strategy.why)}${ep.barriers.length ? ` · barriers: ${ep.barriers.map(esc).join(", ")}` : ""}</p>
       ${ep.approvals.map((a) => `<p class="small"><span class="status ${a.decision === "approve" ? "good" : "hide"}">${a.decision === "approve" ? "Approved" : "Dismissed"}</span> by ${esc(a.by)} on ${esc(a.on)}</p>`).join("")}</div>` : ""}
+    ${ep.status.stage !== "closed" ? `<div class="sub-panel"><h3 class="small">What the patient says is in the way</h3>
+      ${ep.reported.map((r) => `<p class="small"><span class="bchip">${esc(r.label)}</span> ${r.note ? esc(r.note) + " · " : ""}<span class="muted">recorded by ${esc(r.by)}, ${esc(r.on)}</span></p>`).join("") || '<p class="small muted">Nothing recorded yet.</p>'}
+      <form id="barrier" class="barrier-form" data-id="${ep.id}"><label class="field">Barrier<select name="code">${BARRIERS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>
+        <label class="field">Note<input name="note" maxlength="300" placeholder="Optional"></label><button class="btn sm" type="submit">${icon("check")}Record</button></form></div>` : ""}
     ${ep.resolution ? `<div class="sub-panel done"><h3 class="small">${icon("check")} Closed by ${esc(ep.resolution.by)}</h3><p>${esc(ep.resolution.label)}</p>${ep.resolution.note ? `<p class="small muted">${esc(ep.resolution.note)}</p>` : ""}</div>`
+      : opts.length && !can("clinician") ? `<p class="small muted" style="margin-top:12px">${icon("lock")} A clinician signs off this episode.</p>`
       : opts.length ? `<form id="signoff" class="signoff" data-id="${ep.id}"><h3>Clinician sign-off</h3>
         <p class="small muted">${opts[0][0] === "patient-declined" ? "An abnormal result can only close after a diagnostic report. If the patient declines, document it here." : "Only a named clinician can close the loop. This is recorded on the episode."}</p>
         <label class="field">Resolution<select name="resolution" required>${opts.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>
-        <label class="field">Clinician<input name="clinician" required minlength="3" maxlength="80" placeholder="e.g. Dr. Al Mansoori" autocomplete="name"></label>
+        <p class="small">${icon("lock")} Signing as <strong>${esc(me.name)}</strong></p>
         <label class="field">Note${opts[0][0] === "patient-declined" ? " (required)" : ""}<textarea name="note" rows="2" maxlength="500" ${opts[0][0] === "patient-declined" ? 'required minlength="10"' : ""}></textarea></label>
         <button class="btn" type="submit">${icon("check")}Sign off and close</button><p class="small" id="signoff-msg" role="status"></p></form>`
       : `<p class="small muted" style="margin-top:12px">${icon("lock")} This episode can be signed off once a ${ep.abnormal ? "diagnostic report" : "result"} arrives.</p>`}
     <p style="margin-top:14px"><button class="btn ghost-dark" data-person="${ep.person_id}">${icon("person")}Open person</button>
       <a class="btn ghost-dark" href="/api/fhir/Patient/${ep.person_id}/$everything" target="_blank" rel="noopener">${icon("feed")}FHIR record</a></p>`;
   if (!dlg.open) dlg.showModal();
+}
+
+const BARRIERS = [["transport", "No transport to the clinic"], ["work", "Cannot take time off work"], ["language", "Needs an interpreter"], ["childcare", "No childcare"],
+  ["fear", "Worried about the test"], ["unreachable", "Hard to reach by phone"], ["female", "Prefers a female clinician"]];
+async function submitBarrier(form) {
+  try {
+    await post(`/api/episodes/${form.dataset.id}/barriers`, Object.fromEntries(new FormData(form)));
+    say("Barrier recorded");
+    await openEpisode(form.dataset.id);
+    if (!$("#loop").hidden) loadLoop();
+  } catch (e) { alert(e.message); }
 }
 
 async function submitSignoff(form) {
@@ -911,10 +945,14 @@ function personLoop(v) {
 
 /* ---------- Events ---------- */
 document.addEventListener("click", async (ev) => {
-  const t = ev.target.closest("[data-view],[data-person],[data-dim],[data-decide],[data-open-top],[data-ask],[data-brief],[data-copy-brief],[data-plan-kind],[data-plan-lang],[data-episode],[data-stage],[data-outreach],[data-analyse],[data-feed],[data-close-drawer]");
+  const t = ev.target.closest("[data-view],[data-person],[data-dim],[data-decide],[data-open-top],[data-ask],[data-brief],[data-copy-brief],[data-plan-kind],[data-plan-lang],[data-episode],[data-stage],[data-outreach],[data-analyse],[data-feed],[data-close-drawer],[data-logout],[data-guest],[data-fill],[data-audit]");
   if (!t) return;
   if (t.dataset.episode) { if (t.dataset.person == null) openEpisode(t.dataset.episode); return; }
   if (t.hasAttribute("data-close-drawer")) { $("#episode").close(); return; }
+  if (t.dataset.audit != null) { auditFilter = t.dataset.audit; loadAudit(); return; }
+  if (t.hasAttribute("data-logout")) { await post("/api/auth/logout", {}); location.reload(); return; }
+  if (t.dataset.guest) { signIn(null, t.dataset.guest); return; }
+  if (t.dataset.fill) { $("#login-form [name=username]").value = t.dataset.fill; $("#login-form [name=password]").value = t.dataset.pw; $("#login-form [name=password]").focus(); return; }
   if (t.dataset.stage != null) { loopStage = t.dataset.stage || null; loadLoop(); return; }
   if (t.dataset.outreach) { decideOutreach(t.dataset.id, t.dataset.outreach, t); return; }
   if (t.hasAttribute("data-analyse")) { analyseBottlenecks(); return; }
@@ -942,6 +980,8 @@ document.addEventListener("click", async (ev) => {
 
 document.addEventListener("submit", (ev) => {
   if (ev.target.id === "signoff") { ev.preventDefault(); submitSignoff(ev.target); return; }
+  if (ev.target.id === "barrier") { ev.preventDefault(); submitBarrier(ev.target); return; }
+  if (ev.target.id === "login-form") { ev.preventDefault(); signIn(ev.target); return; }
   if (ev.target.id !== "ask-form") return;
   ev.preventDefault();
   const q = $("#ask-input").value.trim();
@@ -954,4 +994,56 @@ document.addEventListener("pointermove", (e) => { const t = e.target.closest?.("
 document.addEventListener("focusin", (e) => { const t = e.target.closest?.("[data-tip]"); if (t) { const r = t.getBoundingClientRect(); showTip(t.dataset.tip, r.left, r.bottom); } });
 document.addEventListener("focusout", () => (tip.hidden = true));
 
-init().catch((e) => { say(e.message); $("#main").insertAdjacentHTML("afterbegin", `<div class="card banner" role="alert">Could not load: ${esc(e.message)}</div>`); });
+/* ---------- Sign-in ---------- */
+async function showLogin(msg = "") {
+  const o = await api("/api/auth/options").catch(() => ({ guest: true, roles: {}, demo_users: [] }));
+  const el = $("#login");
+  el.hidden = false;
+  el.innerHTML = `<div class="login-card" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5l9 3.4v6.8c0 5.6-3.8 9.4-9 11.3-5.2-1.9-9-5.7-9-11.3V8.4z"/><path d="M11.5 16.2l3 3 6-6.4"/></svg></span>
+      <span><strong>Wiqaya</strong><small>وقاية · Prevention planner</small></span></div>
+    <h1 id="login-title">Sign in</h1>
+    <p class="muted small">Synthetic data only. Every sign-in, record view and change is written to the audit log.</p>
+    ${msg ? `<p class="banner" role="alert">${esc(msg)}</p>` : ""}
+    <form id="login-form" class="login-form">
+      <label class="field">Username<input name="username" autocomplete="username" required></label>
+      <label class="field">Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn glow" type="submit">${icon("lock")}Sign in</button><p class="small" id="login-msg" role="status"></p></form>
+    ${o.demo_users.length ? `<div class="demo-users"><p class="small"><strong>Demo accounts</strong> · password <code>${esc(o.demo_password)}</code></p>
+      ${o.demo_users.map((u) => `<button class="demo-u" data-fill="${esc(u.username)}" data-pw="${esc(o.demo_password)}"><strong>${esc(u.name)}</strong><span>${esc(o.roles[u.role])} · ${esc(u.username)}</span></button>`).join("")}</div>` : ""}
+    ${o.guest ? `<div class="guest"><p class="small"><strong>Or continue as a guest</strong> · every feature, labelled as guest in the audit log</p>
+      <div class="guest-row">${Object.entries(o.roles).map(([r, l]) => `<button class="btn ghost-dark sm" data-guest="${r}">${esc(l)}</button>`).join("")}</div></div>` : ""}
+  </div>`;
+  $("#login-form [name=username]").focus();
+}
+
+async function signIn(form, guestRole) {
+  try {
+    me = guestRole ? await post("/api/auth/guest", { role: guestRole })
+      : await post("/api/auth/login", Object.fromEntries(new FormData(form)));
+    location.reload();
+  } catch (e) { $("#login-msg").textContent = e.message.replace(/^\d+: /, ""); }
+}
+
+/* ---------- Audit log ---------- */
+let auditFilter = "";
+async function loadAudit() {
+  const a = await api(`/api/audit${auditFilter ? `?action=${encodeURIComponent(auditFilter)}` : ""}`);
+  $("#audit").innerHTML = `
+    <div class="card"><div class="card-head"><div><h2>${icon("lock")} Audit log</h2><p class="card-sub">Latest ${a.rows.length} entries · append-only · each row carries the hash of the one before</p></div>
+      ${a.chain_ok ? `<span class="status good">${icon("check")}Hash chain intact</span>` : `<span class="status warn">${icon("alert")}Chain broken: a row was edited or deleted</span>`}</div>
+      <div class="segs" role="group" aria-label="Filter">${[["", "All"], ["login", "Sign-ins"], ["person", "Record views"], ["episode", "Care loop"], ["outreach", "Outreach"], ["ingest", "EHR feed"], ["ai", "AI"], ["access", "Denied"]]
+        .map(([k, l]) => `<button data-audit="${k}" aria-pressed="${auditFilter === k}">${l}</button>`).join("")}</div>
+      <div class="table-wrap"><table class="wl"><thead><tr><th>Time (UTC)</th><th>User</th><th>Role</th><th>Action</th><th>Target</th><th>Detail</th><th>IP</th></tr></thead><tbody>
+        ${a.rows.map((r) => `<tr><td class="small">${esc(r.at.replace("T", " ").slice(0, 19))}</td><td>${esc(r.user)}</td><td>${esc(r.role)}</td><td><span class="badge">${esc(r.action)}</span></td>
+          <td>${esc(r.target)}</td><td class="small">${esc(r.detail)}</td><td class="small muted">${esc(r.ip)}</td></tr>`).join("")}</tbody></table></div></div>
+    <div class="card"><div class="card-head"><div><h2>Accounts and roles</h2><p class="card-sub">Least privilege: population roles never see names</p></div></div>
+      <ul class="members">${a.users.map((u) => `<li class="member"><span class="av" aria-hidden="true">${esc(u.name[0])}</span><div><strong>${esc(u.name)}</strong> <span class="muted small">${esc(u.username)} · ${esc(u.role)}</span></div></li>`).join("")}</ul></div>`;
+  say("Audit log loaded");
+}
+
+(async () => {
+  me = await api("/api/auth/me").catch(() => null);
+  if (!me) return showLogin();
+  init().catch((e) => { say(e.message); $("#main").insertAdjacentHTML("afterbegin", `<div class="card banner" role="alert">Could not load: ${esc(e.message)}</div>`); });
+})();

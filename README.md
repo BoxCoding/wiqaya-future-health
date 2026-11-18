@@ -15,7 +15,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8099     # open http://localhost:8099
 echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses Ollama
-.venv/bin/python -m pytest -q                  # 56 tests, no model or key needed
+.venv/bin/python -m pytest -q                  # 61 tests, no model or key needed
 ```
 
 `WIQAYA_HOUSEHOLDS` sets the population size (default 12000; startup takes about 5 s).
@@ -23,10 +23,33 @@ echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses
 ## Deploy (Google Cloud Run)
 
 ```bash
-PROJECT_ID=<your-project> deploy/cloudrun.sh   # reads GEMINI_API_KEY and WIQAYA_INGEST_TOKEN from .env into Secret Manager
+PROJECT_ID=<your-project> deploy/cloudrun.sh   # reads GEMINI_API_KEY, WIQAYA_INGEST_TOKEN and WIQAYA_SESSION_SECRET from .env into Secret Manager
 ```
 
-Live demo: https://wiqaya-242709395679.me-central1.run.app (no login). Code report: `docs/CODE_REPORT.md`.
+Live demo: https://wiqaya-242709395679.me-central1.run.app. Code report: `docs/CODE_REPORT.md`.
+
+## Sign-in, roles and audit
+
+Every `/api` route except `/health` and `/api/auth/*` needs a signed-in user. Passwords are hashed with scrypt; the
+session is an HttpOnly, SameSite=Strict, HMAC-signed cookie (Secure outside local runs) that expires after 8 hours.
+Sign-in attempts are limited to 10 per 5 minutes per address.
+
+| Role | Can |
+| --- | --- |
+| Clinician | Individual records, AI case briefs, care-gap decisions, clinician sign-off of care episodes |
+| Care coordinator | Individual records, follow-up worklist, outreach approval, patient-reported barriers |
+| Population planner | Population views only: no names, no individual records (the API returns 403) |
+| Privacy officer | Population views plus the audit log |
+
+**Demo access** (shown on the login page): `dr.amna`, `sara.coord`, `omar.planner`, `privacy.admin`, password
+`Wiqaya-Demo-2026`, or **Continue as guest** with any role. Guests are labelled "(guest)" on every sign-off and in the
+audit log. Outside a demo set `WIQAYA_GUEST=0` and `WIQAYA_DEMO_USERS=0`.
+
+The **audit log** records every sign-in (and failed attempt), record view, worklist view, decision, sign-off,
+approval, reported barrier, FHIR export, inbound EHR message, AI request and refused access, with user, role and
+address. It is append-only and hash-chained: each row stores the hash of the previous one, so an edited or deleted row
+shows as a broken chain. **Persistence:** decisions and every care-episode change are saved to SQLite (`WIQAYA_DB`) and
+replayed on top of the simulated history at startup.
 
 ## Screening-to-care loop and EHR interfaces
 
@@ -42,6 +65,12 @@ Every invitation becomes a care episode: **Invited → Booked → Attended → R
 - **Human oversight:** only a named clinician closes an episode (`POST /api/episodes/{id}/close`). An abnormal result
   closes only after a diagnostic report, or as a documented patient decline. Coordinators approve or dismiss each
   suggested outreach step; nothing is sent automatically.
+- **Continuous monitor:** after every inbound result and on a timer (`WIQAYA_MONITOR_MINUTES`, default 30) the monitor
+  re-scans the loop and raises alerts (new abnormal result, abnormal result past target, biggest delay moved), and
+  refreshes the AI bottleneck brief.
+- **Patient-reported barriers:** a coordinator or clinician records what the patient says is in the way (transport,
+  time off work, interpreter, childcare, worry about the test, hard to reach, prefers a female clinician); the next
+  step follows it.
 - **Bottleneck analyst:** a Gemini agent (`/api/agent/bottlenecks`, or ask "where are patients stalling?") reads the loop
   summary and worklist, and explains the worst stage, open abnormal results, the barrier most linked to delay and the
   first cases to act on. Barrier and centre rates are hidden for groups under 10.
@@ -134,9 +163,10 @@ Bias check: for adults never screened, true risk is 7.8%; a naive model predicts
   a data-processing agreement and in-region processing.
 - For local Ollama runs, `gemma3:1b` is too small for the planner and writer roles; use `gemma3:4b` or larger.
 - AI endpoints are limited to 20 requests a minute per client (`WIQAYA_ASK_LIMIT`), per process.
-- End-to-end Selenium suite (81 tests) lives in the separate `wiqaya-qa` repository.
-- Clinician decisions, care episodes and sign-offs are kept in memory (lost on restart); a pilot stores them as FHIR Tasks in the EHR.
-- No user login: the demo is open to guests and the clinician name on a sign-off is typed, not authenticated.
-  A pilot needs DoH single sign-on with clinician and coordinator roles.
+- End-to-end Selenium suite (88 tests) lives in the separate `wiqaya-qa` repository.
+- Changes persist in one SQLite file. On Cloud Run that file lives on the instance's temporary disk, so it resets when the
+  instance is replaced; a pilot uses a managed PostgreSQL in the UAE with encryption at rest, and keeps episodes as FHIR Tasks.
+- Demo accounts and guest access exist for judging. A pilot replaces them with DoH single sign-on (UAE PASS / facility
+  identity provider), multi-factor authentication and per-facility role assignment.
 - EHR ingest uses one shared bearer token; a pilot adds mutual TLS from the interface engine and Malaffi onboarding.
 - Pathway codes use a local code system; they must be mapped to DoH-approved LOINC and SNOMED CT sets.

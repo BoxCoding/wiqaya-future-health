@@ -58,6 +58,7 @@ class Engine:
         self.episodes = loop.simulate(self)  # shortcut: in-memory like decisions; the pilot keeps FHIR Tasks in the EHR
         self.episode = {ep["id"]: ep for ep in self.episodes}
         self.feed_log = []  # demo HL7 messages received this run
+        self.monitor, self.alerts, self.auto_brief = {}, [], None  # filled by the continuous monitor (app/main.py)
         self.episodes_of = defaultdict(list)
         for ep in self.episodes:
             self.episodes_of[ep["person_id"]].append(ep)

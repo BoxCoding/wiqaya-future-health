@@ -95,26 +95,28 @@ def apply_resource(engine, res):
                      res.get("conclusion") or ("Diagnosis confirmed" if confirmed else "Diagnostic test negative"), confirmed=confirmed)
     else:
         raise InteropError(f"Resource type '{rt}' is not accepted")
-    return f"{ep['id']} → {loop.stage(ep)}"
+    return ep["id"], f"{ep['id']} → {loop.stage(ep)}"
 
 
 def ingest_bundle(engine, bundle):
-    """FHIR transaction/batch bundle → OperationOutcome-style result, one issue per entry."""
+    """FHIR transaction/batch bundle → (OperationOutcome-style result with one issue per entry, changed episode ids)."""
     if not isinstance(bundle, dict) or bundle.get("resourceType") != "Bundle":
         raise InteropError("Body must be a FHIR Bundle")
     entries = bundle.get("entry") or []
     if not isinstance(entries, list) or not 1 <= len(entries) <= 100:
         raise InteropError("A bundle carries 1 to 100 entries")
-    issues = []
+    issues, changed = [], []
     for i, e in enumerate(entries):
         res = e.get("resource") if isinstance(e, dict) else None
         try:
             if not isinstance(res, dict):
                 raise InteropError("Entry has no resource")
-            issues.append(dict(severity="information", code="informational", entry=i, diagnostics=apply_resource(engine, res)))
+            eid, text = apply_resource(engine, res)
+            changed.append(eid)
+            issues.append(dict(severity="information", code="informational", entry=i, diagnostics=text))
         except (InteropError, loop.LoopError) as err:
             issues.append(dict(severity="error", code="processing", entry=i, diagnostics=str(err)))
-    return dict(resourceType="OperationOutcome", issue=issues)
+    return dict(resourceType="OperationOutcome", issue=issues), changed
 
 
 # ---------- HL7 v2 ----------
@@ -147,12 +149,12 @@ def parse_oru(text):
 
 
 def ingest_hl7(engine, text):
-    """Returns the HL7 ACK text; AA when applied, AE with the reason when not."""
+    """Returns (HL7 ACK text, changed episode id or None); AA when applied, AE with the reason when not."""
     control = ""
     try:
         control, _, obs = parse_oru(text)
-        detail = apply_resource(engine, obs)
-        return ack(control, "AA", detail), detail
+        eid, detail = apply_resource(engine, obs)
+        return ack(control, "AA", detail), eid
     except (InteropError, loop.LoopError) as err:
         return ack(control, "AE", str(err)), None
 

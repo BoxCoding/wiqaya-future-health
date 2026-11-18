@@ -30,6 +30,16 @@ RESOLUTIONS = {
     "specialist-referral": "Diagnosis confirmed: handed to specialist care",
     "patient-declined": "Patient declined further tests (documented)",
 }
+# Barriers a patient tells the coordinator about, and the outreach step each one calls for.
+REPORTED = {
+    "transport": ("No transport to the clinic", "Arrange transport, or book the nearest centre"),
+    "work": ("Cannot take time off work", "Offer an evening or Saturday slot"),
+    "language": ("Needs an interpreter", "Call with an interpreter in the preferred language"),
+    "childcare": ("No childcare", "Book a family slot so the children are seen in the same visit"),
+    "fear": ("Worried about the test", "Nurse call to explain the test and what happens next"),
+    "unreachable": ("Hard to reach by phone", "Try the alternate contact, or a community health worker visit"),
+    "female": ("Prefers a female clinician", "Book the visit with a female clinician"),
+}
 TODAY = WEEK_START
 CLINICIANS = ["Dr. Al Mansoori", "Dr. Haddad", "Dr. Rao", "Dr. Santos", "Dr. Al Ketbi", "Dr. Nasser"]
 
@@ -60,6 +70,18 @@ def barriers(p):
     return out
 
 
+def reported(ep):
+    return [REPORTED[r["code"]][0] for r in ep.get("reported", [])]
+
+
+def record_barrier(ep, code, note, by, on=None):
+    if code not in REPORTED:
+        raise LoopError(f"Unknown barrier '{code}'")
+    if stage(ep) == "closed":
+        raise LoopError("Episode is already closed")
+    ep.setdefault("reported", []).append(dict(code=code, label=REPORTED[code][0], note=note.strip(), by=by, on=_day(on or TODAY)))
+
+
 def stage(ep):
     return ep["events"][-1]["stage"]
 
@@ -85,6 +107,10 @@ def strategy(ep, p, today=TODAY):
     """The next outreach step for a stalled episode, with the reason. Rules only; a coordinator approves it."""
     st, bars = status(ep, today), barriers(p)
     s = st["stage"]
+    told = ep.get("reported", [])
+    if told and s in ("invited", "booked", "referred"):  # what the patient said beats what the data suggests
+        label, action = REPORTED[told[-1]["code"]]
+        return dict(action=action, why=f"Patient reported: {label.lower()}; {st['days']} days at '{LABEL[s]}'")
     if s in ("resulted",) and ep["abnormal"]:
         return dict(action="Clinician call within 48 hours to book the diagnostic test",
                     why=f"Abnormal result waiting {st['days']} days with no referral")
@@ -216,7 +242,7 @@ def view(ep, p):
     st = status(ep)
     return dict(id=ep["id"], person_id=p["id"], name=p["name"], age=p["age"], centre=p["centre"], pathway=ep["pathway"],
                 abnormal=ep["abnormal"], result=ep["result"], resolution=ep["resolution"], events=ep["events"],
-                status=st, stage_label=LABEL[st["stage"]], barriers=barriers(p),
+                status=st, stage_label=LABEL[st["stage"]], barriers=barriers(p), reported=ep.get("reported", []),
                 strategy=None if st["stage"] == "closed" else strategy(ep, p),
                 approvals=ep.get("approvals", []))
 
@@ -237,8 +263,9 @@ def summary(engine):
                 for ep, _, _ in closed if ep["abnormal"]]
     hide = lambda n: n if n >= MIN_CELL else None  # noqa: E731
     barrier_rows = []
-    for b in ["Lives far from the clinic", "Often misses visits", "Aged 65+", "Reached through a guardian"]:
-        with_b = [r for r in open_rows if b in barriers(r[2])]
+    for b in ["Lives far from the clinic", "Often misses visits", "Aged 65+", "Reached through a guardian",
+              *(label for label, _ in REPORTED.values())]:
+        with_b = [r for r in open_rows if b in barriers(r[2]) or b in reported(r[0])]
         late = sum(r[1]["overdue"] > 0 for r in with_b)
         barrier_rows.append(dict(barrier=b, open=hide(len(with_b)), overdue=hide(late) if len(with_b) >= MIN_CELL else None,
                                  rate=round(late / len(with_b), 3) if len(with_b) >= MIN_CELL else None))
@@ -265,3 +292,35 @@ def worklist(engine, stage_filter=None, limit=40):
         out.append((urgency(ep, st), ep))
     out.sort(key=lambda x: (-x[0], x[1]["id"]))
     return [view(ep, engine.people[ep["person_id"]]) for _, ep in out[:limit]]
+
+
+def scan(engine, at):
+    """Continuous monitor: compares the loop with the last scan and raises an alert for each change that
+    needs a person. Runs after every inbound event and on a timer, so nothing waits for someone to look."""
+    abnormal, late = set(), set()
+    for ep in engine.episodes:
+        st = status(ep)
+        if st["stage"] in ("resulted", "referred", "diagnosed") and ep["abnormal"]:
+            abnormal.add(ep["id"])
+            if st["overdue"] > 0:
+                late.add(ep["id"])
+    first = engine.monitor.get("abnormal") is None
+    new_abn = abnormal - (engine.monitor.get("abnormal") or set())
+    new_late = late - (engine.monitor.get("late") or set())
+    worst = summary(engine)["worst"]
+    alerts = []
+    if first:
+        alerts.append(dict(level="info", text=f"Monitoring started: {len(abnormal)} abnormal results open, {len(late)} past target; "
+                                              f"biggest delay at '{worst['label']}'"))
+    else:
+        alerts += [dict(level="high", episode=i, text=f"New abnormal result {i}: refer for a diagnostic test within {SLA['resulted']} days")
+                   for i in sorted(new_abn)]
+        alerts += [dict(level="high", episode=i, text=f"Abnormal result {i} has passed its target") for i in sorted(new_late - new_abn)]
+        if worst["stage"] != engine.monitor.get("worst"):
+            alerts.append(dict(level="medium", text=f"Biggest delay moved to '{worst['label']}' ({worst['overdue']} past target)"))
+    engine.monitor.update(abnormal=abnormal, late=late, worst=worst["stage"], last_scan=at)
+    for a in alerts:
+        a["at"] = at
+    engine.alerts[:0] = alerts[::-1]
+    del engine.alerts[50:]
+    return alerts

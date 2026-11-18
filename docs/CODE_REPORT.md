@@ -7,8 +7,8 @@ Digital Innovation Challenge (Population Health). All data is synthetic.
 | --- | --- |
 | Live demo | https://wiqaya-242709395679.me-central1.run.app (Google Cloud Run, me-central1, no login) |
 | Stack | Python 3.12 · FastAPI · NumPy · vanilla JavaScript · Gemini `gemini-3.1-flash-lite` |
-| Tests | 56 unit and API tests, all passing (about 2.5 s, no model or key needed) |
-| End-to-end | 81 Selenium tests in the separate `wiqaya-qa` repository (74 non-AI tests run and passed on 2026-11-19) |
+| Tests | 61 unit and API tests, all passing (about 5 s, no model or key needed) |
+| End-to-end | 88 Selenium tests in the separate `wiqaya-qa` repository, all passed on 2026-11-19 |
 | Runtime dependencies | 4: `fastapi`, `uvicorn`, `numpy`, `certifi` |
 
 ## 1. Structure and size
@@ -120,6 +120,11 @@ Duplicates removed, behaviour unchanged, all tests passing:
 
 ## 6. Security and privacy
 
+**Sign-in and roles (added 2026-11-19):** scrypt password hashes; HMAC-signed HttpOnly SameSite=Strict session cookie,
+Secure in production, 8-hour expiry; sign-in limited to 10 attempts per 5 minutes; four least-privilege roles enforced
+on the server (population roles get 403 on any named record); every record access and change written to an
+append-only, hash-chained audit log; security headers (no framing, no MIME sniffing, no caching of API responses).
+
 A full security audit (source review, independent verifiers) found no confirmed vulnerability and
 two privacy leads; a later pass added a third. All three are fixed, each with a regression test:
 
@@ -145,8 +150,8 @@ max 1 instance.
 
 | Item | Why it matters | Suggested fix |
 | --- | --- | --- |
-| Decisions, episodes and rate limit are in process memory | Lost on restart; limits only hold with one instance | Episodes as FHIR Tasks in the EHR, PostgreSQL for decisions, Redis for limits |
-| No login | Anyone can record a decision or sign off an episode on the public demo; the clinician name is typed | DoH single sign-on with clinician and coordinator roles before any pilot |
+| SQLite on the instance disk; rate limits in process memory | Cloud Run can replace the instance and its disk; limits hold per instance | Managed PostgreSQL in the UAE, Redis for limits |
+| Demo accounts and guest access | Judges can sign in with any role; guests are labelled in the log | DoH single sign-on with MFA and per-facility roles before any pilot |
 | One shared ingest token | Any holder of the token can push events | Mutual TLS from the interface engine, per-source tokens |
 | Local pathway codes | Not yet interoperable terminology | Map to DoH-approved LOINC and SNOMED CT sets |
 | Dependencies unpinned | A new release can change behaviour at build time | Pin versions in `requirements.txt` |

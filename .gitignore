@@ -8,3 +8,6 @@ __pycache__/
 
 # Submission decks stay local
 docs/*.pptx
+
+# Local SQLite store
+*.db

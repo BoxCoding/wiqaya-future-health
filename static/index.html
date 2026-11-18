@@ -22,6 +22,7 @@
         <span><strong>Wiqaya</strong><small>وقاية · Prevention planner</small></span>
       </div>
       <nav id="nav" role="tablist" aria-label="Views" aria-orientation="vertical"></nav>
+      <div class="user-box" id="user-box" hidden></div>
       <div class="side-foot">
         <span class="live-dot" aria-hidden="true"></span>
         <span>Synthetic EHR feed<br><small>FHIR R4 · HL7 v2 · no real records</small></span>
@@ -49,10 +50,12 @@
         <section id="person" role="tabpanel" aria-labelledby="tab-person" hidden></section>
         <section id="safeguards" role="tabpanel" aria-labelledby="tab-safeguards" hidden></section>
         <section id="outcomes" role="tabpanel" aria-labelledby="tab-outcomes" hidden></section>
+        <section id="audit" role="tabpanel" aria-labelledby="tab-audit" hidden></section>
       </main>
     </div>
   </div>
   <dialog id="episode" class="drawer" aria-labelledby="ep-title"></dialog>
+  <div id="login" class="login" hidden></div>
   <div id="tip" class="tip" role="tooltip" hidden></div>
   <div id="status" class="sr-only" role="status" aria-live="polite"></div>
   <script src="app.js"></script>

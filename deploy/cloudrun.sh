@@ -14,13 +14,13 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
 NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
 SECRETS=()
 # Each .env value below goes to Secret Manager and is mounted as that env var; never baked into the image.
-for VAR in GEMINI_API_KEY WIQAYA_INGEST_TOKEN; do
+for VAR in GEMINI_API_KEY WIQAYA_INGEST_TOKEN WIQAYA_SESSION_SECRET; do
   VALUE="$(sed -n "s/^${VAR}=//p" .env | head -1 | tr -d '"')"
   if [ -z "$VALUE" ]; then
     [ "$VAR" = GEMINI_API_KEY ] && { echo "GEMINI_API_KEY missing from .env" >&2; exit 1; }
-    continue  # no ingest token: EHR ingest stays off (503)
+    continue  # no ingest token: EHR ingest stays off (503); no session secret: sign-ins end on restart
   fi
-  NAME="$([ "$VAR" = GEMINI_API_KEY ] && echo "$SECRET" || echo "wiqaya-ingest-token")"
+  NAME="$([ "$VAR" = GEMINI_API_KEY ] && echo "$SECRET" || echo "wiqaya-$(echo "${VAR#WIQAYA_}" | tr 'A-Z_' 'a-z-')")"
   if gcloud secrets describe "$NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
     printf '%s' "$VALUE" | gcloud secrets versions add "$NAME" --data-file=- --project "$PROJECT_ID" >/dev/null
   else

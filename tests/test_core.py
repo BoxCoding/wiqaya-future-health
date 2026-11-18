@@ -91,6 +91,8 @@ def test_bias_correction_scores_never_screened_closer_to_truth(engine):
 
 def test_api_round_trip():
     with TestClient(app) as c:
+        assert c.get("/api/overview").status_code == 401
+        c.post("/api/auth/guest", json={"role": "clinician"})
         centre = c.get("/api/overview").json()["centres"][0]
         member = c.get(f"/api/plan/{centre}").json()["households"][0]["members"][0]
         view = c.get(f"/api/person/{member['id']}").json()
@@ -121,6 +123,7 @@ def test_ai_endpoints_are_rate_limited(monkeypatch):
     monkeypatch.setattr(main, "ASK_LIMIT", 2)
     main._asks.clear()
     with TestClient(app) as c:
+        c.post("/api/auth/guest", json={"role": "planner"})
         codes = [c.post("/api/agent/ask", json={"question": "children in Al Ain"}).status_code for _ in range(3)]
     main._asks.clear()
     assert codes == [200, 200, 429]
