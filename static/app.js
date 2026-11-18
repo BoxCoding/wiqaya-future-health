@@ -727,6 +727,7 @@ const days = (n) => `${n} day${n === 1 ? "" : "s"}`;
 
 async function loadLoop() {
   const [s, work] = await Promise.all([api("/api/loop"), api(`/api/loop/worklist${loopStage ? `?stage=${loopStage}` : ""}`)]);
+  const kept = { b: $("#bottleneck-body")?.innerHTML, f: $("#feed-body")?.innerHTML };  // a refresh keeps the analyst brief and feed log
   const pctOver = (st) => (st.count ? st.overdue / st.count : 0);
   const rateBars = (rows, key) => rows.map((r) => `
     <div class="hbar" data-tip="${esc(r[key])}: ${r.rate == null ? "group under 10, hidden" : `${fmt(r.overdue)} of ${fmt(r.open)} open episodes overdue`}">
@@ -783,6 +784,8 @@ async function loadLoop() {
       <div class="card"><div class="card-head"><div><h2>Delay by barrier</h2><p class="card-sub">Share of open episodes past target · groups under 10 hidden</p></div></div><div class="hbars">${rateBars(s.barriers, "barrier")}</div></div>
       <div class="card"><div class="card-head"><div><h2>Delay by centre</h2><p class="card-sub">Share of open episodes past target</p></div></div><div class="hbars">${rateBars(s.centres, "centre")}</div></div>
     </div>`;
+  if (kept.b?.includes("fact-lines")) $("#bottleneck-body").innerHTML = kept.b;
+  if (kept.f) $("#feed-body").innerHTML = kept.f;
   countUp($("#loop"));
   say("Care loop loaded");
 }
@@ -810,20 +813,20 @@ async function decideOutreach(id, decision, btn) {
 }
 
 async function analyseBottlenecks() {
-  const card = $("#bottleneck"), box = $("#bottleneck-body");
-  card.classList.add("running");
-  box.innerHTML = `<div class="stages" role="status" aria-label="Agents working">${stages(["Supervisor", "Loop monitor", "Bottleneck analyst", "Safety & grounding"], 0.45)}</div><div class="shimmer"></div><div class="shimmer short"></div>`;
+  $("#bottleneck").classList.add("running");
+  $("#bottleneck-body").innerHTML = `<div class="stages" role="status" aria-label="Agents working">${stages(["Supervisor", "Loop monitor", "Bottleneck analyst", "Safety & grounding"], 0.45)}</div><div class="shimmer"></div><div class="shimmer short"></div>`;
   try {
     const r = await api("/api/agent/bottlenecks");
     renderModel(r.model);
+    const box = $("#bottleneck-body");  // look it up again: a refresh may have re-rendered the card meanwhile
     const f = r.facts, lines = Object.entries(f.facts).filter(([k]) => f.used.includes(k));
     box.innerHTML = `${f.lead ? `<div class="ai-quote"><span class="quote-k">${icon("spark")}AI summary · ${esc(r.model.model)}</span><p>${esc(f.lead)}</p></div>` : ""}
       <ul class="fact-lines">${lines.map(([k, t]) => `<li>${icon("check")}<span>${esc(t)}</span>${f.picked.includes(k) ? `<span class="pick">${icon("spark")}AI pick</span>` : `<span class="verified">${icon(REQUIRED.bottlenecks.includes(k) ? "lock" : "check")}${REQUIRED.bottlenecks.includes(k) ? "Required" : "Verified"}</span>`}</li>`).join("")}</ul>
       <div style="margin-top:10px">${sourceBadge(r)}</div>
       <details class="replay"><summary>Agent trace · ${r.trace.length} steps</summary>${traceList(r.trace)}</details>`;
     say("Bottleneck analysis ready");
-  } catch (e) { box.innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
-  finally { card.classList.remove("running"); }
+  } catch (e) { $("#bottleneck-body").innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
+  finally { $("#bottleneck")?.classList.remove("running"); }
 }
 
 async function receiveFeed() {
@@ -836,7 +839,7 @@ async function receiveFeed() {
       <p class="small" style="margin-top:10px">${ok ? icon("check") : icon("alert")} <button class="link" data-episode="${ep.id}">${ep.id} · ${esc(ep.name)}</button> moved to ${stageChip(ep.stage_label, ep.status.stage)}
         ${ep.abnormal ? `<span class="status warn">${icon("alert")}Abnormal: now on the worklist for referral</span>` : `<span class="status good">${icon("check")}Normal: waiting for clinician sign-off</span>`}</p>`;
     say(`Lab result received for ${ep.id}`);
-    setTimeout(() => { if (!$("#loop").hidden) loadLoop().then(() => { $("#feed-body").innerHTML = box.innerHTML; }); }, 2500);
+    setTimeout(() => { if (!$("#loop").hidden) loadLoop(); }, 2500);
   } catch (e) { box.innerHTML = `<p class="banner" role="alert">${esc(e.message)}</p>`; }
 }
 
