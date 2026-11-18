@@ -730,8 +730,9 @@ async function caseBrief(id) {
 
 /* ---------- Care loop ---------- */
 let loopStage = null;
-const STAGE_TONE = { invited: "s1", booked: "s1", attended: "s3", resulted: "s7", referred: "s2", diagnosed: "s2", closed: "good" };
-const stageChip = (label, stage) => `<span class="stage-chip t-${STAGE_TONE[stage]}">${esc(label)}</span>`;
+const STAGE = { invited: ["Invited", "s1"], booked: ["Booked", "s1"], attended: ["Attended", "s3"], resulted: ["Result in", "s7"],
+  referred: ["Referred", "s2"], diagnosed: ["Diagnostic done", "s2"], closed: ["Closed", "good"] };  // labels mirror loop.LABEL
+const stageChip = (label, stage) => `<span class="stage-chip t-${STAGE[stage][1]}">${esc(label)}</span>`;
 const days = (n) => `${n} day${n === 1 ? "" : "s"}`;
 
 async function loadLoop() {
@@ -863,30 +864,17 @@ async function receiveFeed() {
 
 function timeline(ep) {
   return `<ol class="tl">${ep.events.map((e) => `
-    <li class="tl-${STAGE_TONE[e.stage]}"><span class="tl-dot"></span><div>
-      <div class="tl-head"><strong>${esc({ invited: "Invited", booked: "Booked", attended: "Attended", resulted: "Result in", referred: "Referred", diagnosed: "Diagnostic done", closed: "Closed" }[e.stage])}</strong>
+    <li class="tl-${STAGE[e.stage][1]}"><span class="tl-dot"></span><div>
+      <div class="tl-head"><strong>${STAGE[e.stage][0]}</strong>
         <span class="muted small">${new Date(e.on).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span><span class="badge">${esc(e.source)}</span></div>
       <p class="small">${esc(e.detail)}${e.by ? ` <span class="muted">· signed by ${esc(e.by)}</span>` : ""}</p></div></li>`).join("")}
     ${ep.status.stage !== "closed" ? `<li class="tl-next ${ep.status.overdue ? "late" : ""}"><span class="tl-dot"></span><div><div class="tl-head"><strong>Waiting for ${esc(ep.status.waiting_for)}</strong>
       <span class="muted small">${days(ep.status.days)}${ep.status.sla ? ` · target ${ep.status.sla}` : ""}</span>${ep.status.overdue ? `<span class="status warn">${icon("clock")}${days(ep.status.overdue)} overdue</span>` : ""}</div></div></li>` : ""}</ol>`;
 }
 
-const RESOLUTION_OPTIONS = {
-  normal: [["normal-recall", "Normal result: routine recall scheduled"]],
-  diagnosed: [["diagnostic-negative", "Diagnostic test negative: return to routine screening"], ["diagnosis-treatment", "Diagnosis confirmed: treatment started"], ["specialist-referral", "Diagnosis confirmed: handed to specialist care"]],
-  declined: [["patient-declined", "Patient declined further tests (documented)"]],
-};
-function signoffOptions(ep) {
-  const s = ep.status.stage;
-  if (s === "resulted" && !ep.abnormal) return RESOLUTION_OPTIONS.normal;
-  if (s === "diagnosed") return RESOLUTION_OPTIONS.diagnosed;
-  if (ep.abnormal && (s === "resulted" || s === "referred")) return RESOLUTION_OPTIONS.declined;
-  return [];
-}
-
 async function openEpisode(id) {
   const ep = await api(`/api/episodes/${id}`);
-  const opts = signoffOptions(ep), dlg = $("#episode");
+  const opts = ep.closable, dlg = $("#episode"), decline = opts[0]?.code === "patient-declined";  // the server decides what can close
   dlg.innerHTML = `
     <div class="drawer-head"><div><p class="eyebrow">${ep.id} · ${esc(ep.centre)}</p><h2 id="ep-title">${esc(ep.name)} <span class="muted" style="font-weight:500">${age(ep.age)}</span></h2>
       <div class="consents">${chip(ep.pathway)}${stageChip(ep.stage_label, ep.status.stage)}${ep.abnormal ? `<span class="status warn">${icon("alert")}Abnormal result</span>` : ""}</div></div>
@@ -896,15 +884,15 @@ async function openEpisode(id) {
       ${ep.approvals.map((a) => `<p class="small"><span class="status ${a.decision === "approve" ? "good" : "hide"}">${a.decision === "approve" ? "Approved" : "Dismissed"}</span> by ${esc(a.by)} on ${esc(a.on)}</p>`).join("")}</div>` : ""}
     ${ep.status.stage !== "closed" ? `<div class="sub-panel"><h3 class="small">What the patient says is in the way</h3>
       ${ep.reported.map((r) => `<p class="small"><span class="bchip">${esc(r.label)}</span> ${r.note ? esc(r.note) + " · " : ""}<span class="muted">recorded by ${esc(r.by)}, ${esc(r.on)}</span></p>`).join("") || '<p class="small muted">Nothing recorded yet.</p>'}
-      <form id="barrier" class="barrier-form" data-id="${ep.id}"><label class="field">Barrier<select name="code">${BARRIERS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>
+      <form id="barrier" class="barrier-form" data-id="${ep.id}"><label class="field">Barrier<select name="code">${loopSummary.reported_options.map((o) => `<option value="${o.code}">${esc(o.label)}</option>`).join("")}</select></label>
         <label class="field">Note<input name="note" maxlength="300" placeholder="Optional"></label><button class="btn sm" type="submit">${icon("check")}Record</button></form></div>` : ""}
     ${ep.resolution ? `<div class="sub-panel done"><h3 class="small">${icon("check")} Closed by ${esc(ep.resolution.by)}</h3><p>${esc(ep.resolution.label)}</p>${ep.resolution.note ? `<p class="small muted">${esc(ep.resolution.note)}</p>` : ""}</div>`
       : opts.length && !can("clinician") ? `<p class="small muted" style="margin-top:12px">${icon("lock")} A clinician signs off this episode.</p>`
       : opts.length ? `<form id="signoff" class="signoff" data-id="${ep.id}"><h3>Clinician sign-off</h3>
-        <p class="small muted">${opts[0][0] === "patient-declined" ? "An abnormal result can only close after a diagnostic report. If the patient declines, document it here." : "Only a named clinician can close the loop. This is recorded on the episode."}</p>
-        <label class="field">Resolution<select name="resolution" required>${opts.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>
+        <p class="small muted">${decline ? "An abnormal result can only close after a diagnostic report. If the patient declines, document it here." : "Only a named clinician can close the loop. This is recorded on the episode."}</p>
+        <label class="field">Resolution<select name="resolution" required>${opts.map((o) => `<option value="${o.code}">${esc(o.label)}</option>`).join("")}</select></label>
         <p class="small">${icon("lock")} Signing as <strong>${esc(me.name)}</strong></p>
-        <label class="field">Note${opts[0][0] === "patient-declined" ? " (required)" : ""}<textarea name="note" rows="2" maxlength="500" ${opts[0][0] === "patient-declined" ? 'required minlength="10"' : ""}></textarea></label>
+        <label class="field">Note${decline ? " (required)" : ""}<textarea name="note" rows="2" maxlength="500" ${decline ? 'required minlength="10"' : ""}></textarea></label>
         <button class="btn" type="submit">${icon("check")}Sign off and close</button><p class="small" id="signoff-msg" role="status"></p></form>`
       : `<p class="small muted" style="margin-top:12px">${icon("lock")} This episode can be signed off once a ${ep.abnormal ? "diagnostic report" : "result"} arrives.</p>`}
     <p style="margin-top:14px"><button class="btn ghost-dark" data-person="${ep.person_id}">${icon("person")}Open person</button>
@@ -912,8 +900,6 @@ async function openEpisode(id) {
   if (!dlg.open) dlg.showModal();
 }
 
-const BARRIERS = [["transport", "No transport to the clinic"], ["work", "Cannot take time off work"], ["language", "Needs an interpreter"], ["childcare", "No childcare"],
-  ["fear", "Worried about the test"], ["unreachable", "Hard to reach by phone"], ["female", "Prefers a female clinician"]];
 async function submitBarrier(form) {
   try {
     await post(`/api/episodes/${form.dataset.id}/barriers`, Object.fromEntries(new FormData(form)));
@@ -938,7 +924,7 @@ function personLoop(v) {
   return `<div class="card"><div class="card-head"><div><h2>Care loop</h2><p class="card-sub">Every invitation for this person, through to a signed closure</p></div><span class="badge">FHIR · HL7</span></div>
     <div class="ploop">${v.care_loop.map((ep) => `
       <button class="ploop-row" data-episode="${ep.id}"><span>${chip(ep.pathway)}</span>
-        <span class="ploop-track">${["invited", "booked", "attended", "resulted", "referred", "diagnosed", "closed"].filter((s) => s !== "referred" && s !== "diagnosed" || ep.abnormal)
+        <span class="ploop-track">${Object.keys(STAGE).filter((s) => s !== "referred" && s !== "diagnosed" || ep.abnormal)
           .map((s) => `<i class="${ep.events.some((e) => e.stage === s) ? "on" : ""}" title="${s}"></i>`).join("")}</span>
         ${stageChip(ep.stage_label, ep.status.stage)}${ep.status.overdue ? `<span class="status warn">${icon("clock")}${days(ep.status.overdue)} overdue</span>` : ""}</button>`).join("")}</div></div>`;
 }

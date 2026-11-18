@@ -174,3 +174,48 @@ def test_monitor_alerts_on_a_new_abnormal_result(engine):
     interop.ingest_hl7(engine, interop.sample_oru(engine, ep, True, "M1"))
     alerts = loop.scan(engine, "t1")
     assert any(a.get("episode") == ep["id"] and a["level"] == "high" for a in alerts)
+
+
+def test_malformed_fhir_entry_is_an_error_not_a_crash(engine):
+    ep = first(engine, "invited")
+    out, ids = interop.ingest_bundle(engine, {"resourceType": "Bundle", "entry": [
+        {"resource": {"resourceType": "Encounter", "status": "finished", "subject": "Patient/1"}},
+        {"resource": {"resourceType": "Appointment", "status": "booked", "start": "2026-10-29",
+                      "participant": [{"actor": {"reference": f"Patient/{ep['person_id']}"}}],
+                      "basedOn": [{"reference": f"ServiceRequest/{ep['id']}"}]}},
+    ]})
+    assert [i["severity"] for i in out["issue"]] == ["error", "information"] and ids == [ep["id"]]
+    assert ep["events"][-1]["on"] <= str(loop.TODAY) and ep["appointment"] == "2026-10-29", "booked today, for the 29th"
+
+
+def test_events_cannot_be_back_dated_or_future_dated(engine):
+    ep = first(engine, "invited")
+    with pytest.raises(loop.LoopError):
+        loop.advance(ep, "booked", loop.TODAY.replace(year=2020), "too early")
+    with pytest.raises(loop.LoopError):
+        loop.advance(ep, "booked", loop.TODAY.replace(year=2030), "in the future")
+
+
+def test_ui_closure_options_are_exactly_what_close_accepts(engine):
+    for st in ("resulted", "referred", "diagnosed", "invited"):
+        for ep in [e for e in engine.episodes if loop.stage(e) == st][:5]:
+            allowed = set(loop.closure_options(ep))
+            for code in loop.RESOLUTIONS:
+                trial = {k: (list(v) if isinstance(v, list) else v) for k, v in ep.items()}
+                try:
+                    loop.close(trial, code, "Dr. Test", "documented at length")
+                    assert code in allowed
+                except loop.LoopError:
+                    assert code not in allowed
+
+
+def test_only_failed_sign_ins_count_towards_the_limit(monkeypatch):
+    import app.main as main
+    monkeypatch.setattr(main, "LOGIN_LIMIT", 2)
+    main._logins.clear()
+    with TestClient(app) as c:
+        good = {"username": "dr.amna", "password": auth.DEMO_PASSWORD}
+        assert [c.post("/api/auth/login", json=good).status_code for _ in range(4)] == [200] * 4
+        bad = {"username": "dr.amna", "password": "nope"}
+        assert [c.post("/api/auth/login", json=bad).status_code for _ in range(3)] == [401, 401, 429]
+    main._logins.clear()

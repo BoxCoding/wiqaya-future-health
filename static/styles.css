@@ -600,7 +600,7 @@ svg.reach-chart .seg-row:hover .dot, svg.reach-chart .seg-row:focus .dot { r: 9;
 input, textarea { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; }
 textarea { resize: vertical; }
 .btn.sm { padding: 6px 10px; font-size: .8rem; }
-.plan-stats .alarm, .ls-nums .alarm { background: rgba(232, 112, 90, .22); border-color: rgba(255, 160, 140, .45); }
+.plan-stats .alarm { background: rgba(232, 112, 90, .22); border-color: rgba(255, 160, 140, .45); }
 .loop-hero { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='1.2'%3E%3Crect x='16' y='16' width='24' height='24'/%3E%3Crect x='16' y='16' width='24' height='24' transform='rotate(45 28 28)'/%3E%3C/g%3E%3C/svg%3E"),
   radial-gradient(600px 300px at 100% 0%, rgba(240, 184, 72, .35), transparent 60%), linear-gradient(135deg, #0f766e, #0b3b36); }
 .funnel { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }

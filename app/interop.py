@@ -61,8 +61,8 @@ def apply_resource(engine, res):
         ep = _open_episode(engine, _pid(actor, n), res)
         when = _on(res.get("start"))
         st = res.get("status")
-        if st == "booked":
-            loop.advance(ep, "booked", when, f"Appointment {when:%d %b}", appointment=when.isoformat())
+        if st == "booked":  # the event is the booking (created); `start` is the appointment it booked
+            loop.advance(ep, "booked", _on(res.get("created")), f"Appointment {when:%d %b}", appointment=when.isoformat())
         elif st == "fulfilled":
             loop.advance(ep, "attended", when, "Screening visit completed", source="FHIR Appointment")
         elif st == "noshow":
@@ -116,6 +116,8 @@ def ingest_bundle(engine, bundle):
             issues.append(dict(severity="information", code="informational", entry=i, diagnostics=text))
         except (InteropError, loop.LoopError) as err:
             issues.append(dict(severity="error", code="processing", entry=i, diagnostics=str(err)))
+        except (AttributeError, TypeError):  # a field of the wrong shape, e.g. "subject": "Patient/1"
+            issues.append(dict(severity="error", code="structure", entry=i, diagnostics="Malformed resource"))
     return dict(resourceType="OperationOutcome", issue=issues), changed
 
 

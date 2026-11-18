@@ -23,6 +23,9 @@ from .engine import Engine
 from .store import Store, now
 
 RECORDS = ("clinician", "coordinator")  # roles that may see named individuals
+# Endpoints that change care data are `async def` with no awaits inside, so they run one at a time on the event
+# loop, like the monitor: two clinicians closing the same episode at once cannot both pass the stage check.
+# shortcut: holds for one process (max-instances 1); several instances need a database transaction per change.
 MONITOR_S = float(os.getenv("WIQAYA_MONITOR_MINUTES", "30")) * 60
 
 
@@ -104,13 +107,14 @@ LOGIN_LIMIT, LOGIN_WINDOW_S = 10, 300.0
 _asks, _logins = defaultdict(deque), defaultdict(deque)
 
 
-def _limit(bucket, key, limit, window, msg):
+def _limit(bucket, key, limit, window, msg, count=True):
     now_, q = time.monotonic(), bucket[key]
     while q and now_ - q[0] > window:
         q.popleft()
     if len(q) >= limit:
         raise HTTPException(429, msg)
-    q.append(now_)
+    if count:
+        q.append(now_)
 
 
 def ai_rate_limit(request: Request):
@@ -192,9 +196,11 @@ def auth_options():
 @app.post("/api/auth/login")
 def login(body: Login, request: Request, response: Response, st: Store = Depends(store)):
     ip = auth.client_ip(request)
-    _limit(_logins, ip, LOGIN_LIMIT, LOGIN_WINDOW_S, "Too many sign-in attempts; wait five minutes")
+    msg = "Too many failed sign-ins; wait five minutes"
+    _limit(_logins, ip, LOGIN_LIMIT, LOGIN_WINDOW_S, msg, count=False)  # only failures count: a shared venue Wi-Fi is fine
     u = st.user(body.username.strip().lower())
     if not u or not auth.check_password(body.password, u["pw"]):
+        _limit(_logins, ip, LOGIN_LIMIT, LOGIN_WINDOW_S, msg)
         st.audit(body.username[:60], "-", "login.failure", "", "", ip)
         raise HTTPException(401, "Wrong username or password")
     s = auth.session_for(u["username"], u["name"], u["role"])
@@ -310,7 +316,7 @@ def agent_brief(pid: int, request: Request, s=Depends(auth.require("clinician"))
 
 
 @app.post("/api/decisions", status_code=201)
-def decide(d: Decision, request: Request, s=Depends(auth.require("clinician")), e: Engine = Depends(engine)):
+async def decide(d: Decision, request: Request, s=Depends(auth.require("clinician")), e: Engine = Depends(engine)):
     _person_or_404(e, d.person_id)
     if d.pathway not in {g["pathway"] for g in e.gaps[d.person_id]}:
         raise HTTPException(422, "Pathway is not recommended for this person")
@@ -337,7 +343,7 @@ def episode(eid: str, request: Request, s=Depends(auth.require(*RECORDS)), e: En
 
 
 @app.post("/api/episodes/{eid}/close")
-def close_episode(eid: str, c: Closure, request: Request, s=Depends(auth.require("clinician")), e: Engine = Depends(engine)):
+async def close_episode(eid: str, c: Closure, request: Request, s=Depends(auth.require("clinician")), e: Engine = Depends(engine)):
     """Clinician sign-off: the only way an episode closes. The signer is the signed-in clinician."""
     ep = _episode_or_404(e, eid)
     try:
@@ -350,7 +356,7 @@ def close_episode(eid: str, c: Closure, request: Request, s=Depends(auth.require
 
 
 @app.post("/api/episodes/{eid}/outreach")
-def outreach_decision(eid: str, d: OutreachDecision, request: Request, s=Depends(auth.require("coordinator")),
+async def outreach_decision(eid: str, d: OutreachDecision, request: Request, s=Depends(auth.require("coordinator")),
                       e: Engine = Depends(engine)):
     """A coordinator approves or dismisses the suggested strategy; nothing is sent automatically."""
     ep = _episode_or_404(e, eid)
@@ -365,7 +371,7 @@ def outreach_decision(eid: str, d: OutreachDecision, request: Request, s=Depends
 
 
 @app.post("/api/episodes/{eid}/barriers")
-def report_barrier(eid: str, b: Barrier, request: Request, s=Depends(auth.require(*RECORDS)), e: Engine = Depends(engine)):
+async def report_barrier(eid: str, b: Barrier, request: Request, s=Depends(auth.require(*RECORDS)), e: Engine = Depends(engine)):
     """Records what the patient says is in the way; the suggested next step follows it."""
     ep = _episode_or_404(e, eid)
     try:
@@ -385,7 +391,7 @@ def fhir_everything(pid: int, request: Request, s=Depends(auth.require(*RECORDS)
 
 
 @app.post("/api/feed/demo", dependencies=[Depends(ai_rate_limit)])
-def feed_demo(request: Request, s=Depends(auth.require(*RECORDS)), e: Engine = Depends(engine)):
+async def feed_demo(request: Request, s=Depends(auth.require(*RECORDS)), e: Engine = Depends(engine)):
     """Generates a lab result for an episode waiting on one and runs it through the real HL7 path."""
     waiting = [ep for ep in e.episodes if loop.stage(ep) == "attended"]
     if not waiting:
@@ -411,7 +417,7 @@ def audit_log(request: Request, action: str | None = None, limit: int = 200, s=D
 
 # ---------- EHR interfaces (system to system) ----------
 @app.post("/api/fhir/Bundle")
-def fhir_bundle(request: Request, bundle: dict = Body(...), sysu=Depends(ingest_auth), e: Engine = Depends(engine)):
+async def fhir_bundle(request: Request, bundle: dict = Body(...), sysu=Depends(ingest_auth), e: Engine = Depends(engine)):
     try:
         outcome, ids = interop.ingest_bundle(e, bundle)
     except interop.InteropError as err:

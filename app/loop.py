@@ -147,8 +147,7 @@ def simulate(engine, weeks=8, per_week=600, seed=11):
     def new(p, invited_on):
         g = engine.gaps[p["id"]][0]
         ep = dict(id=f"E{len(episodes) + 1:05d}", person_id=p["id"], pathway=g["pathway"], abnormal=None,
-                  appointment=None, result=None, resolution=None,
-                  events=[_event("invited", invited_on, f"Invited for {g['pathway']}", source="Wiqaya plan")])
+                  appointment=None, result=None, resolution=None, events=[_event("invited", invited_on, f"Invited for {g['pathway']}")])
         episodes.append(ep)
         return ep
 
@@ -209,30 +208,31 @@ def advance(ep, to, on, detail, source=None, **fields):
                "resulted": {"referred"} if ep["abnormal"] else set(), "referred": {"diagnosed"}, "diagnosed": set(), "closed": set()}
     if to not in allowed[s]:
         raise LoopError(f"Episode {ep['id']} is '{s}'; cannot move to '{to}'")
+    if not last_on(ep) <= on <= TODAY:
+        raise LoopError(f"Event date {on} is before the episode's last event or in the future")
     ep.update(fields)
     ep["events"].append(_event(to, on, detail, source=source))
 
 
-def close(ep, code, clinician, note, on=TODAY):
-    """Clinician sign-off. Abnormal results need a diagnostic report first, unless a decline is documented."""
+def closure_options(ep):
+    """The resolutions a clinician may sign now. Abnormal results close only after a diagnostic report,
+    or as a documented decline. The UI offers exactly these; close() accepts nothing else."""
     s = stage(ep)
-    if code not in RESOLUTIONS:
-        raise LoopError(f"Unknown resolution '{code}'")
+    if s == "diagnosed":
+        return ["diagnostic-negative", "diagnosis-treatment", "specialist-referral"]
+    if s in ("resulted", "referred") and ep["abnormal"]:
+        return ["patient-declined"]
+    return ["normal-recall"] if s == "resulted" else []
+
+
+def close(ep, code, clinician, note, on=TODAY):
+    """Clinician sign-off."""
+    if code not in closure_options(ep):
+        raise LoopError(f"Episode {ep['id']} is '{LABEL[stage(ep)]}'; it can close only with: {', '.join(closure_options(ep)) or 'nothing yet'}")
     if not clinician.strip():
         raise LoopError("A named clinician must sign off")
-    if code == "patient-declined":
-        if s not in ("resulted", "referred") or not ep["abnormal"]:
-            raise LoopError("A decline is only recorded on an open abnormal result")
-        if len(note.strip()) < 10:
-            raise LoopError("Document the decline in the note (at least 10 characters)")
-    elif s == "resulted" and not ep["abnormal"]:
-        if code != "normal-recall":
-            raise LoopError("A normal result closes with a routine recall")
-    elif s == "diagnosed":
-        if code == "normal-recall":
-            raise LoopError("Choose the diagnostic outcome")
-    else:
-        raise LoopError(f"Episode {ep['id']} is '{s}'; it can only close after a result or diagnostic report")
+    if code == "patient-declined" and len(note.strip()) < 10:
+        raise LoopError("Document the decline in the note (at least 10 characters)")
     ep["resolution"] = dict(code=code, label=RESOLUTIONS[code], by=clinician.strip(), note=note.strip(), on=_day(on))
     ep["events"].append(_event("closed", on, RESOLUTIONS[code] + (f". {note.strip()}" if note.strip() else ""), by=clinician.strip()))
 
@@ -244,7 +244,7 @@ def view(ep, p):
                 abnormal=ep["abnormal"], result=ep["result"], resolution=ep["resolution"], events=ep["events"],
                 status=st, stage_label=LABEL[st["stage"]], barriers=barriers(p), reported=ep.get("reported", []),
                 strategy=None if st["stage"] == "closed" else strategy(ep, p),
-                approvals=ep.get("approvals", []))
+                closable=[dict(code=c, label=RESOLUTIONS[c]) for c in closure_options(ep)], approvals=ep.get("approvals", []))
 
 
 def summary(engine):
@@ -261,25 +261,25 @@ def summary(engine):
     closed = by_stage["closed"]
     to_close = [(date.fromisoformat(ep["events"][-1]["on"]) - date.fromisoformat(ep["events"][0]["on"])).days
                 for ep, _, _ in closed if ep["abnormal"]]
-    hide = lambda n: n if n >= MIN_CELL else None  # noqa: E731
-    barrier_rows = []
-    for b in ["Lives far from the clinic", "Often misses visits", "Aged 65+", "Reached through a guardian",
-              *(label for label, _ in REPORTED.values())]:
-        with_b = [r for r in open_rows if b in barriers(r[2]) or b in reported(r[0])]
-        late = sum(r[1]["overdue"] > 0 for r in with_b)
-        barrier_rows.append(dict(barrier=b, open=hide(len(with_b)), overdue=hide(late) if len(with_b) >= MIN_CELL else None,
-                                 rate=round(late / len(with_b), 3) if len(with_b) >= MIN_CELL else None))
-    centres = []
-    for c in engine.centres:
-        cr = [r for r in open_rows if r[2]["centre"] == c]
-        late = sum(r[1]["overdue"] > 0 for r in cr)
-        centres.append(dict(centre=c, open=hide(len(cr)), overdue=hide(late), rate=round(late / len(cr), 3) if len(cr) >= MIN_CELL else None))
+    def delay(key, name, group):
+        """A group under MIN_CELL shows nothing: hiding only the count while showing a rate would give the count away."""
+        late = sum(r[1]["overdue"] > 0 for r in group)
+        small = len(group) < MIN_CELL
+        return {key: name, "open": None if small else len(group), "overdue": None if small else late,
+                "rate": None if small else round(late / len(group), 3)}
+
+    tags = [(r, set(barriers(r[2])) | set(reported(r[0]))) for r in open_rows]
+    barrier_rows = [delay("barrier", b, [r for r, t in tags if b in t])
+                    for b in ["Lives far from the clinic", "Often misses visits", "Aged 65+", "Reached through a guardian",
+                              *(label for label, _ in REPORTED.values())]]
+    centres = [delay("centre", c, [r for r in open_rows if r[2]["centre"] == c]) for c in engine.centres]
     worst = max((s for s in stages if s["stage"] != "closed"), key=lambda s: s["overdue"])
     return dict(today=_day(TODAY), total=len(rows), open=len(open_rows), closed=len(closed), overdue=len(overdue),
                 abnormal_open=len(abnormal_open), abnormal_overdue=sum(r[1]["overdue"] > 0 for r in abnormal_open),
                 awaiting_signoff=sum(1 for r in open_rows if r[1]["waiting_for"] == "clinician sign-off"),
                 median_days_to_close_abnormal=round(median(to_close)) if to_close else None,
-                stages=stages, worst=worst, barriers=barrier_rows, centres=centres, sla=SLA)
+                stages=stages, worst=worst, barriers=barrier_rows, centres=centres, sla=SLA,
+                reported_options=[dict(code=c, label=label) for c, (label, _) in REPORTED.items()])
 
 
 def worklist(engine, stage_filter=None, limit=40):
