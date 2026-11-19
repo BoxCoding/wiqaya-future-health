@@ -57,6 +57,7 @@ const LANG = { ar: "Arabic", en: "English" };
 const CHIP_LEGEND = `<div class="legend"><span><span class="sw" style="background:var(--s3)"></span>Child pathway</span><span><span class="sw" style="background:var(--s1)"></span>Adult screening</span><span><span class="sw" style="background:var(--s7)"></span>Genomic</span></div>`;
 
 let overview, outcomes, regions, loopSummary, currentPerson, dimension = "nationality", me = null;
+let planReady = null;  // the first plan load: "Open the top-ranked household" waits for it on a slow network
 const RECORD_ROLES = ["clinician", "coordinator"];
 const can = (...roles) => !!me && roles.includes(me.role);
 const VIEW_ROLES = { plan: RECORD_ROLES, person: RECORD_ROLES, audit: ["admin"] };  // other views: every role
@@ -95,7 +96,7 @@ async function init() {
   showTab("overview");
   const home = overview.centres.includes(me.centre) ? me.centre : overview.centres[0];  // each staff account opens on its own centre
   $("#centre").value = home;
-  if (can(...RECORD_ROLES)) await loadPlan(home);
+  if (can(...RECORD_ROLES)) await (planReady = loadPlan(home));
   api("/api/agent/status").then(renderModel).catch(() => renderModel({ online: false }));
 }
 
@@ -959,7 +960,7 @@ document.addEventListener("click", async (ev) => {
   else if (t.dataset.view) { if ($("#episode").open) $("#episode").close(); showTab(t.dataset.view); }
   else if (t.dataset.person) { if ($("#episode").open) $("#episode").close(); openPerson(Number(t.dataset.person)); }
   else if (t.dataset.dim) { dimension = t.dataset.dim; loadSafeguards(); }
-  else if (t.hasAttribute("data-open-top")) { const first = $("#plan [data-person]"); if (first) openPerson(Number(first.dataset.person)); }
+  else if (t.hasAttribute("data-open-top")) { await planReady; const first = $("#plan [data-person]"); if (first) openPerson(Number(first.dataset.person)); }
   else if (t.dataset.decide) {
     try {
       const d = await post("/api/decisions", { person_id: Number($("#person").dataset.id), pathway: t.dataset.pathway, action: t.dataset.decide });
