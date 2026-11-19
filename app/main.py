@@ -181,7 +181,7 @@ def health():
 def _start(response: Response, s):
     response.set_cookie(auth.COOKIE, auth.sign(s), max_age=auth.TTL_S, httponly=True, samesite="strict",
                         secure=not llm.is_local(), path="/")
-    return dict(user=s["u"], name=auth.display(s), role=s["role"], role_label=auth.ROLES[s["role"]], guest=s["guest"])
+    return auth.public(s)
 
 
 @app.get("/api/auth/options")
@@ -232,7 +232,7 @@ def me(request: Request):
     s = auth.unsign(request.cookies.get(auth.COOKIE))
     if not s:
         return None
-    return dict(user=s["u"], name=auth.display(s), role=s["role"], role_label=auth.ROLES[s["role"]], guest=s["guest"])
+    return auth.public(s)
 
 
 # ---------- population views (every role) ----------

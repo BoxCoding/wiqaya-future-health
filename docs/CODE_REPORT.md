@@ -5,10 +5,10 @@ Digital Innovation Challenge (Population Health). All data is synthetic.
 
 | | |
 | --- | --- |
-| Live demo | https://wiqaya-242709395679.me-central1.run.app (Google Cloud Run, me-central1, no login) |
+| Live demo | https://wiqaya-242709395679.me-central1.run.app (Google Cloud Run, me-central1, demo accounts or guest sign-in) |
 | Stack | Python 3.12 · FastAPI · NumPy · vanilla JavaScript · Gemini `gemini-3.1-flash-lite` |
-| Tests | 61 unit and API tests, all passing (about 5 s, no model or key needed) |
-| End-to-end | 88 Selenium tests in the separate `wiqaya-qa` repository, all passed on 2026-11-19 |
+| Tests | 66 unit and API tests, all passing (about 5 s, no model or key needed) |
+| End-to-end | 90 Selenium tests in the separate `wiqaya-qa` repository, all passed on 2026-11-19 |
 | Runtime dependencies | 4: `fastapi`, `uvicorn`, `numpy`, `certifi` |
 
 ## 1. Structure and size
@@ -99,7 +99,7 @@ Design rules the code enforces:
 | `tests/test_core.py` | 16 | Care-gap rules, consent, outreach privacy, suppression, plan capacity, outcomes, API round trip, consent-withheld fields, private messages |
 | `tests/test_agents.py` | 30 | Rule parsing, verifier, provider matrix (parametrised), `lead_check`, revision then fallback, offline answers |
 | `tests/test_loop.py` | 10 | Stage order, closure rules, forward-only transitions, worklist, small-group suppression, HL7 and FHIR ingest, consent-filtered export, offline bottleneck analyst, ingest token and clinician sign-off over the API |
-| `wiqaya-qa` (separate repo) | 81 | Selenium page objects across every tab, including 9 care-loop tests; AI tests assert invariants, not wording |
+| `wiqaya-qa` (separate repo) | 90 | Selenium page objects across every tab, including care-loop, sign-in, role and sign-out tests; AI tests assert invariants, not wording |
 
 Tests run with `WIQAYA_HOUSEHOLDS=1500` and no model, so they are fast and deterministic.
 Line coverage is not measured (no coverage tool is installed).

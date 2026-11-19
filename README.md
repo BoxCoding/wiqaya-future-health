@@ -15,7 +15,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8099     # open http://localhost:8099
 echo 'GEMINI_API_KEY=your-key' > .env          # without a key, a local run uses Ollama
-.venv/bin/python -m pytest -q                  # 61 tests, no model or key needed
+.venv/bin/python -m pytest -q                  # 66 tests, no model or key needed
 ```
 
 `WIQAYA_HOUSEHOLDS` sets the population size (default 12000; startup takes about 5 s).
@@ -163,7 +163,7 @@ Bias check: for adults never screened, true risk is 7.8%; a naive model predicts
   a data-processing agreement and in-region processing.
 - For local Ollama runs, `gemma3:1b` is too small for the planner and writer roles; use `gemma3:4b` or larger.
 - AI endpoints are limited to 20 requests a minute per client (`WIQAYA_ASK_LIMIT`), per process.
-- End-to-end Selenium suite (88 tests) lives in the separate `wiqaya-qa` repository.
+- End-to-end Selenium suite (90 tests) lives in the separate `wiqaya-qa` repository.
 - Changes persist in one SQLite file. On Cloud Run that file lives on the instance's temporary disk, so it resets when the
   instance is replaced; a pilot uses a managed PostgreSQL in the UAE with encryption at rest, and keeps episodes as FHIR Tasks.
 - Demo accounts and guest access exist for judging. A pilot replaces them with DoH single sign-on (UAE PASS / facility

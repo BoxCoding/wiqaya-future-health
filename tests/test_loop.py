@@ -219,3 +219,17 @@ def test_only_failed_sign_ins_count_towards_the_limit(monkeypatch):
         bad = {"username": "dr.amna", "password": "nope"}
         assert [c.post("/api/auth/login", json=bad).status_code for _ in range(3)] == [401, 401, 429]
     main._logins.clear()
+
+
+def test_each_staff_login_opens_its_own_centre_and_top_household():
+    with TestClient(app) as c:
+        tops = {}
+        for user in ("dr.amna", "sara.coord"):
+            me = c.post("/api/auth/login", json={"username": user, "password": auth.DEMO_PASSWORD}).json()
+            assert c.get("/api/auth/me").json()["centre"] == me["centre"] == auth.HOME_CENTRE[user]
+            tops[user] = c.get(f"/api/plan/{me['centre']}").json()["households"][0]["members"][0]["id"]
+        for role in ("clinician", "coordinator"):
+            me = c.post("/api/auth/guest", json={"role": role}).json()
+            tops[role] = c.get(f"/api/plan/{me['centre']}").json()["households"][0]["members"][0]["id"]
+        assert len(set(tops.values())) == 4, "every staff login starts on a different household"
+        assert c.post("/api/auth/guest", json={"role": "planner"}).json()["centre"] is None

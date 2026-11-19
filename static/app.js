@@ -15,6 +15,7 @@ const post = (path, body) => api(path, { method: "POST", headers: { "Content-Typ
 const PATHS = {
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   plan: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.4 8.3-8 9.5C7.4 20.3 4 17 4 12V6z"/><path d="M9 12l2 2 4-4"/>',
   chart: '<path d="M3 21h18M6 17v-6M11 17V5M16 17v-9M21 17v-3"/>',
@@ -83,7 +84,7 @@ async function init() {
     `<button role="tab" id="tab-${id}" aria-controls="${id}" aria-selected="${i === 0}" data-view="${id}">${icon(ic)}${label}</button>`).join("");
   $("#user-box").hidden = false;
   $("#user-box").innerHTML = `<span class="av" aria-hidden="true">${esc(me.name[0])}</span><span><strong>${esc(me.name)}</strong><small>${esc(me.role_label)}</small></span>
-    <button class="icon-btn" data-logout aria-label="Sign out" title="Sign out">${icon("x")}</button>`;
+    <button class="signout" data-logout>${icon("logout")}Sign out</button>`;
   renderCopilot();
   $("#person").innerHTML = `<div class="card empty">${icon("person")}<p>Pick anyone from the weekly plan to see why they were invited.</p><button class="btn" data-open-top>Open the top-ranked household</button></div>`;
   [overview, outcomes, regions, loopSummary] = await Promise.all([api("/api/overview"), api("/api/outcomes"), api("/api/safeguards?dimension=region"), api("/api/loop")]);
@@ -92,7 +93,9 @@ async function init() {
   $("#centre").addEventListener("change", () => loadPlan($("#centre").value));
   renderOverview();
   showTab("overview");
-  if (can(...RECORD_ROLES)) await loadPlan(overview.centres[0]);
+  const home = overview.centres.includes(me.centre) ? me.centre : overview.centres[0];  // each staff account opens on its own centre
+  $("#centre").value = home;
+  if (can(...RECORD_ROLES)) await loadPlan(home);
   api("/api/agent/status").then(renderModel).catch(() => renderModel({ online: false }));
 }
 
@@ -290,6 +293,8 @@ function riskTrack(r) {
 }
 
 const overdue = (d) => (d < 60 ? `${d} days` : d < 730 ? `${Math.round(d / 30.4)} months` : `${Math.round(d / 365)} years`);
+// "No test on record" counts from the start age, which can read as "35 years overdue": say what we know instead.
+const gapDue = (g) => (g.reason === "No test on record" ? "no test on record" : `${overdue(g.overdue_days)} overdue`);
 const OVERDUE_CAP = 1095;  // days; bars are capped at 3 years so one decades-old gap doesn't flatten the rest
 
 async function openPerson(id) {
@@ -345,7 +350,7 @@ async function openPerson(id) {
           const seen = ep?.events.find((e) => e.stage === "attended");
           return `
           <div class="gap-row">
-            <div class="gap-top">${chip(g.pathway)}${ep ? `<button class="link" data-episode="${ep.id}">${stageChip(`In care loop · ${ep.stage_label}`, ep.status.stage)}</button>` : `<b>${overdue(g.overdue_days)} overdue</b>`}</div>
+            <div class="gap-top">${chip(g.pathway)}${ep ? `<button class="link" data-episode="${ep.id}">${stageChip(`In care loop · ${ep.stage_label}`, ep.status.stage)}</button>` : `<b>${gapDue(g)}</b>`}</div>
             ${ep ? "" : `<div class="od-track" data-tip="${fmt(g.overdue_days)} days overdue"><i class="k-${kind(g.pathway)}" style="width:${Math.max(Math.min(g.overdue_days / OVERDUE_CAP, 1) * 100, 3)}%"></i></div>`}
             <p class="small">${ep ? `Screened ${esc(seen.on)}; follow-up is tracked in the care loop.` : esc(g.reason)} <span class="muted">· data: ${g.data.map(esc).join(", ")}</span></p>
             <div class="seg-group" role="group" aria-label="Clinician decision on ${esc(g.pathway)}">${["accept", "change", "decline"].map((a) => `
@@ -688,7 +693,7 @@ function briefTiles(v, picked) {
   const withheld = v.provenance.filter((d) => !d.authorised).map((d) => d.category);
   const r = v.risk;
   const tiles = [
-    ["summary", "Care gaps", ["summary"], v.gaps.length ? `${v.gaps.map((g) => chip(g.pathway)).join("")}<ul class="tile-list">${v.gaps.map((g) => `<li>${esc(g.reason)} · <b>${overdue(g.overdue_days)} overdue</b></li>`).join("")}</ul>` : '<p class="muted">No open care gaps.</p>'],
+    ["summary", "Care gaps", ["summary"], v.gaps.length ? `${v.gaps.map((g) => chip(g.pathway)).join("")}<ul class="tile-list">${v.gaps.map((g) => `<li>${esc(g.reason)}${g.reason === "No test on record" ? "" : ` · <b>${gapDue(g)}</b>`}</li>`).join("")}</ul>` : '<p class="muted">No open care gaps.</p>'],
     ["risk", "Risk (24 months)", ["risk", "factors"], r ? `<p class="tile-big">${pct(r.p)}</p>${riskTrack(r)}<div>${r.factors.map((f) => `<span class="chip">${esc(f.factor)}</span>`).join("")}</div>` : '<p class="tile-big small-big">Rules only</p><p class="muted small">Children are prioritised by care-gap rules; no model score.</p>'],
     ["lift", "Invitation lift", ["lift"], `<p class="tile-big">+${(v.lift * 100).toFixed(1)}<small> pts</small></p><div class="meter"><i style="width:${Math.min(v.lift / 0.35, 1) * 100}%;background:var(--s1)"></i></div><p class="muted small">higher chance of attending if invited</p>`],
     ["slot", "This week", ["slot"], v.slot ? `<p class="tile-big small-big">${icon("clock")} ${esc(v.slot)}</p><p class="muted small">Back-to-back with the household</p>` : '<p class="tile-big small-big">Not this week</p><p class="muted small">Higher-benefit households filled the slots</p>'],
@@ -938,7 +943,7 @@ document.addEventListener("click", async (ev) => {
   if (t.dataset.audit != null) { auditFilter = t.dataset.audit; loadAudit(); return; }
   if (t.hasAttribute("data-logout")) { await post("/api/auth/logout", {}); location.reload(); return; }
   if (t.dataset.guest) { signIn(null, t.dataset.guest); return; }
-  if (t.dataset.fill) { $("#login-form [name=username]").value = t.dataset.fill; $("#login-form [name=password]").value = t.dataset.pw; $("#login-form [name=password]").focus(); return; }
+  if (t.dataset.fill) { $("#login-form [name=username]").value = t.dataset.fill; $("#login-form [name=password]").value = t.dataset.pw; return signIn($("#login-form")); }  // one click for judges
   if (t.dataset.stage != null) { loopStage = t.dataset.stage || null; loadLoop(); return; }
   if (t.dataset.outreach) { decideOutreach(t.dataset.id, t.dataset.outreach, t); return; }
   if (t.hasAttribute("data-analyse")) { analyseBottlenecks(); return; }

@@ -690,11 +690,14 @@ dialog.drawer::backdrop { background: rgba(5, 20, 18, .45); }
 .demo-u span { font-size: .78rem; color: var(--muted); }
 .guest { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--grid); }
 .guest-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.user-box { display: grid; grid-template-columns: 30px minmax(0, 1fr) 32px; gap: 10px; align-items: center; margin: auto 0 0; padding: 12px 10px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: .85rem; }
+.user-box { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; margin: auto 0 0; padding: 12px 10px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: .85rem; }
 .user-box + .side-foot { margin-top: 0; }
 .user-box strong { display: block; line-height: 1.2; }
 .user-box small { color: var(--side-muted); }
-.user-box .icon-btn { width: 32px; height: 32px; background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .12); color: var(--side-ink); }
+.user-box .signout { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-weight: 600; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); color: var(--side-ink); }
+.user-box .signout:hover, .user-box .signout:focus-visible { background: rgba(255, 255, 255, .12); }
+.user-box .signout svg { width: 16px; height: 16px; }
 .alerts { margin: 16px 0 0; }
 .alerts h2 { display: inline-flex; gap: 8px; align-items: center; }
 .alert-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

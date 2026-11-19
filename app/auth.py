@@ -30,6 +30,9 @@ ROLES = {
 DEMO_PASSWORD = os.getenv("WIQAYA_DEMO_PASSWORD", "Wiqaya-Demo-2026")  # shown on the login page: demo only
 DEMO_USERS = [("dr.amna", "Dr. Amna Al Mansoori", "clinician"), ("sara.coord", "Sara Haddad", "coordinator"),
               ("omar.planner", "Omar Rashid", "planner"), ("privacy.admin", "Layla Nasser", "admin")]
+# Each staff account works at one primary-care centre; its plan and top-ranked household open first.
+HOME_CENTRE = {"dr.amna": "Al Ain PHC 1", "sara.coord": "Abu Dhabi City PHC 2",
+               "guest-clinician": "Abu Dhabi City PHC 3", "guest-coordinator": "Al Dhafra PHC 1"}
 COOKIE = "wiqaya_session"
 TTL_S = 8 * 3600
 SECRET = (os.getenv("WIQAYA_SESSION_SECRET") or secrets.token_hex(32)).encode()  # unset: sessions end on restart
@@ -100,6 +103,12 @@ def require(*roles):
 
 def display(s):
     return f"{s['name']} (guest)" if s.get("guest") else s["name"]
+
+
+def public(s):
+    """The signed-in user as the browser sees it."""
+    return dict(user=s["u"], name=display(s), role=s["role"], role_label=ROLES[s["role"]], guest=s["guest"],
+                centre=HOME_CENTRE.get(s["u"]))
 
 
 def client_ip(request: Request):

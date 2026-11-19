@@ -33,8 +33,9 @@ for VAR in GEMINI_API_KEY WIQAYA_INGEST_TOKEN WIQAYA_SESSION_SECRET; do
 done
 
 # One instance: decisions and the AI rate limit live in process memory (see app/main.py, app/engine.py).
+# min 1 keeps it warm for judges (a cold start builds the population, about 12 s); set 0 after judging to stop the idle cost.
 gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
-  --allow-unauthenticated --min-instances 0 --max-instances 1 \
+  --allow-unauthenticated --min-instances 1 --max-instances 1 \
   --memory 1Gi --cpu 1 --timeout 120 --cpu-boost \
   --set-env-vars WIQAYA_ENV=production \
   --set-secrets "$(IFS=,; echo "${SECRETS[*]}")" --quiet
